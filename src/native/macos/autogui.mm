@@ -1,7 +1,37 @@
 #import <ApplicationServices/ApplicationServices.h>
-#import <unistd.h> // usleep
+#import <unistd.h>
+
+static CGMouseButton _btn(int b) {
+  switch (b) {
+    case 1: return kCGMouseButtonRight;
+    case 2: return kCGMouseButtonCenter;
+    default: return kCGMouseButtonLeft;
+  }
+}
+static CGEventType _downType(int b) {
+  switch (b) {
+    case 1: return kCGEventRightMouseDown;
+    case 2: return kCGEventOtherMouseDown;
+    default: return kCGEventLeftMouseDown;
+  }
+}
+static CGEventType _upType(int b) {
+  switch (b) {
+    case 1: return kCGEventRightMouseUp;
+    case 2: return kCGEventOtherMouseUp;
+    default: return kCGEventLeftMouseUp;
+  }
+}
 
 extern "C" {
+
+void dag_get_screen_size(double* width, double* height) {
+  CGDirectDisplayID did = CGMainDisplayID();
+  size_t w = CGDisplayPixelsWide(did);
+  size_t h = CGDisplayPixelsHigh(did);
+  if (width) *width = (double)w;
+  if (height) *height = (double)h;
+}
 
 void dag_get_mouse_position(double* x, double* y) {
   CGEventRef e = CGEventCreate(NULL);
@@ -18,40 +48,48 @@ void dag_move_mouse(double x, double y) {
   CFRelease(move);
 }
 
-void dag_move_mouse_smooth(double x, double y, double duration_secs) {
-  if (duration_secs <= 0) {
-    dag_move_mouse(x, y);
-    return;
-  }
+void dag_mouse_down(int button) {
+  double x=0,y=0; dag_get_mouse_position(&x,&y);
+  CGPoint p = CGPointMake(x,y);
+  CGEventRef e = CGEventCreateMouseEvent(NULL, _downType(button), p, _btn(button));
+  CGEventPost(kCGHIDEventTap, e);
+  CFRelease(e);
+}
 
-  // Get current position
-  double sx = 0, sy = 0;
-  dag_get_mouse_position(&sx, &sy);
+void dag_mouse_up(int button) {
+  double x=0,y=0; dag_get_mouse_position(&x,&y);
+  CGPoint p = CGPointMake(x,y);
+  CGEventRef e = CGEventCreateMouseEvent(NULL, _upType(button), p, _btn(button));
+  CGEventPost(kCGHIDEventTap, e);
+  CFRelease(e);
+}
 
-  const int fps = 60;
-  int steps = (int)(duration_secs * fps);
-  if (steps < 1) steps = 1;
-
-  for (int i = 1; i <= steps; ++i) {
-    double t = (double)i / (double)steps;               // 0..1
-    // Simple ease-in-out (cubic)
-    double tt = (t < 0.5) ? 4*t*t*t : 1 - pow(-2*t + 2, 3) / 2.0;
-    double nx = sx + (x - sx) * tt;
-    double ny = sy + (y - sy) * tt;
-
-    CGPoint p = CGPointMake(nx, ny);
-    CGEventRef move = CGEventCreateMouseEvent(NULL, kCGEventMouseMoved, p, kCGMouseButtonLeft);
-    CGEventPost(kCGHIDEventTap, move);
-    CFRelease(move);
-
-    // Sleep ~per-frame
-    useconds_t wait_us = (useconds_t)((1.0 / fps) * 1000000.0);
-    usleep(wait_us);
+void dag_mouse_click(int button, int clicks, double interval_secs) {
+  if (clicks < 1) clicks = 1;
+  for (int i=0; i<clicks; ++i) {
+    dag_mouse_down(button);
+    dag_mouse_up(button);
+    if (i+1 < clicks) {
+      useconds_t us = (useconds_t)(interval_secs * 1000000.0);
+      if (us > 0) usleep(us);
+    }
   }
 }
 
+void dag_scroll(int delta_lines) {
+  CGEventRef e = CGEventCreateScrollWheelEvent(NULL, kCGScrollEventUnitLine, 1, (int32_t)delta_lines);
+  CGEventPost(kCGHIDEventTap, e);
+  CFRelease(e);
+}
+
+void dag_hscroll(int delta_lines) {
+  // wheelCount = 2 → (vertical, horizontal). Here vertical=0, horizontal=delta_lines.
+  CGEventRef e = CGEventCreateScrollWheelEvent(NULL, kCGScrollEventUnitLine, 2, 0, (int32_t)delta_lines);
+  CGEventPost(kCGHIDEventTap, e);
+  CFRelease(e);
+}
+
 int dag_is_accessibility_trusted() {
-  // If false, user must grant Terminal (or your app) Accessibility in System Settings.
   return AXIsProcessTrusted() ? 1 : 0;
 }
 

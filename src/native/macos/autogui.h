@@ -2,16 +2,26 @@
 extern "C" {
 #endif
 
-// Returns current mouse position (global display coords)
-void dag_get_mouse_position(double* x, double* y);
+// Screen
+void dag_get_screen_size(double* width, double* height);
 
-// Instantly moves the mouse to (x, y)
+// Mouse position & move (absolute)
+void dag_get_mouse_position(double* x, double* y);
 void dag_move_mouse(double x, double y);
 
-// Smoothly moves the mouse to (x, y) over duration_secs
-void dag_move_mouse_smooth(double x, double y, double duration_secs);
+// Buttons: 0=left, 1=right, 2=middle
+void dag_mouse_down(int button);
+void dag_mouse_up(int button);
 
-// Returns 1 if Accessibility permissions are granted, else 0
+// Convenience click (doesn't move)
+void dag_mouse_click(int button, int clicks, double interval_secs);
+
+// Scroll (vertical lines, positive = up, negative = down)
+void dag_scroll(int delta_lines);
+// Horizontal scroll (positive = right, negative = left)
+void dag_hscroll(int delta_lines);
+
+// Permissions
 int dag_is_accessibility_trusted();
 
 #ifdef __cplusplus

@@ -9,8 +9,17 @@ typedef _DGetPos = void Function(ffi.Pointer<ffi.Double>, ffi.Pointer<ffi.Double
 typedef _CMove = ffi.Void Function(ffi.Double, ffi.Double);
 typedef _DMove = void Function(double, double);
 
-typedef _CMoveSmooth = ffi.Void Function(ffi.Double, ffi.Double, ffi.Double);
-typedef _DMoveSmooth = void Function(double, double, double);
+typedef _CDownUp = ffi.Void Function(ffi.Int32);
+typedef _DDownUp = void Function(int);
+
+typedef _CClick = ffi.Void Function(ffi.Int32, ffi.Int32, ffi.Double);
+typedef _DClick = void Function(int, int, double);
+
+typedef _CScroll = ffi.Void Function(ffi.Int32);
+typedef _DScroll = void Function(int);
+
+typedef _CSize = ffi.Void Function(ffi.Pointer<ffi.Double>, ffi.Pointer<ffi.Double>);
+typedef _DSize = void Function(ffi.Pointer<ffi.Double>, ffi.Pointer<ffi.Double>);
 
 typedef _CIsTrusted = ffi.Int32 Function();
 typedef _DIsTrusted = int Function();
@@ -19,13 +28,23 @@ class MacOSBindings {
   late final ffi.DynamicLibrary _lib;
   late final _DGetPos _getPos;
   late final _DMove _move;
-  late final _DMoveSmooth _moveSmooth;
+  late final _DDownUp _mouseDown;
+  late final _DDownUp _mouseUp;
+  late final _DClick _click;
+  late final _DScroll _vscroll;
+  late final _DScroll _hscroll;
+  late final _DSize _getScreenSize;
   late final _DIsTrusted _isTrusted;
 
   MacOSBindings._(this._lib) {
     _getPos = _lib.lookupFunction<_CGetPos, _DGetPos>('dag_get_mouse_position');
     _move = _lib.lookupFunction<_CMove, _DMove>('dag_move_mouse');
-    _moveSmooth = _lib.lookupFunction<_CMoveSmooth, _DMoveSmooth>('dag_move_mouse_smooth');
+    _mouseDown = _lib.lookupFunction<_CDownUp, _DDownUp>('dag_mouse_down');
+    _mouseUp = _lib.lookupFunction<_CDownUp, _DDownUp>('dag_mouse_up');
+    _click = _lib.lookupFunction<_CClick, _DClick>('dag_mouse_click');
+    _vscroll = _lib.lookupFunction<_CScroll, _DScroll>('dag_scroll');
+    _hscroll = _lib.lookupFunction<_CScroll, _DScroll>('dag_hscroll');
+    _getScreenSize = _lib.lookupFunction<_CSize, _DSize>('dag_get_screen_size');
     _isTrusted = _lib.lookupFunction<_CIsTrusted, _DIsTrusted>('dag_is_accessibility_trusted');
   }
 
@@ -33,26 +52,28 @@ class MacOSBindings {
     if (!Platform.isMacOS) {
       throw UnsupportedError('MacOSBindings can only be used on macOS');
     }
-    // Adjust the path if you move the dylib (we’ll package properly later).
     final lib = ffi.DynamicLibrary.open('src/native/macos/libdart_autogui.dylib');
     return MacOSBindings._(lib);
   }
 
   Point<double> mousePosition() {
-    final px = calloc<ffi.Double>();
-    final py = calloc<ffi.Double>();
-    try {
-      _getPos(px, py);
-      return Point(px.value, py.value);
-    } finally {
-      calloc.free(px);
-      calloc.free(py);
-    }
+    final px = calloc<ffi.Double>(), py = calloc<ffi.Double>();
+    try { _getPos(px, py); return Point(px.value, py.value); }
+    finally { calloc.free(px); calloc.free(py); }
   }
 
   void moveTo(double x, double y) => _move(x, y);
-  void moveToSmooth(double x, double y, Duration duration) =>
-      _moveSmooth(x, y, duration.inMilliseconds / 1000.0);
+  void mouseDown(int button) => _mouseDown(button);
+  void mouseUp(int button) => _mouseUp(button);
+  void click(int button, int clicks, double intervalSec) => _click(button, clicks, intervalSec);
+  void vscroll(int deltaLines) => _vscroll(deltaLines);
+  void hscroll(int deltaLines) => _hscroll(deltaLines);
+
+  Point<int> screenSize() {
+    final pw = calloc<ffi.Double>(), ph = calloc<ffi.Double>();
+    try { _getScreenSize(pw, ph); return Point(pw.value.toInt(), ph.value.toInt()); }
+    finally { calloc.free(pw); calloc.free(ph); }
+  }
 
   bool isAccessibilityTrusted() => _isTrusted() == 1;
 }

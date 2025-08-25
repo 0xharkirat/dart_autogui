@@ -2,24 +2,37 @@ import 'dart:io';
 import 'package:dart_autogui/dart_autogui.dart';
 
 Future<void> main() async {
-  // 1) Check permissions
+  // Permissions tip
   if (!Mouse.isAccessibilityTrusted) {
     stderr.writeln(
-      '⚠️  Accessibility permission missing.\n'
-      'Give your Terminal (or app) access: System Settings → Privacy & Security → Accessibility.'
+      '⚠️  Accessibility missing. Enable your Terminal/IDE in:\n'
+      'System Settings → Privacy & Security → Accessibility\n'
     );
-    // You can continue, but events may do nothing.
   }
 
-  // 2) Read current position
-  final p = Mouse.position();
-  print('Current mouse at: $p');
+  // --- Print mouse position continuously (Ctrl+C to quit) -------------
+  stdout.writeln('Press Ctrl+C to quit. Current position prints in place.\n');
+  ProcessSignal.sigint.watch().listen((_) {
+    stdout.writeln('\nBye!');
+    exit(0);
+  });
 
-  // 3) Move instantly
+  // Also demonstrate the API once before loop:
+  final size = Screen.size();
+  stdout.writeln('Screen size: ${size.x} x ${size.y}');
+  stdout.writeln('onScreen(0,0) -> ${Screen.onScreen(0,0)}');
+  stdout.writeln('onScreen(${size.x},${size.y}) -> ${Screen.onScreen(size.x, size.y)} (expected false)');
   await Mouse.moveTo(200, 200);
-  sleep(Duration(milliseconds: 300));
+  await Mouse.move(0, 80, duration: Duration(milliseconds: 300), easing: easeInOutQuad);
+  Mouse.doubleClick();
+  Mouse.scroll(5);
+  Mouse.hscroll(-4);
 
-  // 4) Smooth glide
-  await Mouse.moveTo(1000, 600, duration: Duration(milliseconds: 900));
-  print('Done.');
+  // Live position printer (PyAutoGUI-style)
+  while (true) {
+    final p = Mouse.position();
+    final s = 'X: ${p.x.toStringAsFixed(0).padLeft(4)}  Y: ${p.y.toStringAsFixed(0).padLeft(4)}';
+    stdout.write('$s\r');
+    await Future.delayed(Duration(milliseconds: 50));
+  }
 }
