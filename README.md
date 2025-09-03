@@ -1,39 +1,15 @@
-<!-- 
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# dart_autogui
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages). 
+`dart_autogui` is a Dart package for cross-platform GUI automation. It enables you to programmatically control mouse and keyboard actions, take screenshots, and interact with the desktop—ideal for automation, testing, or scripting tasks.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages). 
--->
-
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+**Note:** This package is under development. It is implemented purely in Dart using FFI bindings to C and platform-native interfaces. There are **no dependencies on Python or external runtimes**.
 
 ## Features
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+- Move and control the mouse
+- Perform mouse clicks and drags
+- Send keyboard input and shortcuts
+- Capture screenshots and locate images on the screen
+- Works on Windows, macOS, and Linux
 
-## Getting started
 
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder. 
-
-```dart
-const like = 'sample';
-```
-
-## Additional information
-
-TODO: Tell users more about the package: where to find more information, how to 
-contribute to the package, how to file issues, what response they can expect 
-from the package authors, and more.
