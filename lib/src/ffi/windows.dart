@@ -31,7 +31,7 @@ typedef _DIsTrusted = int Function();
 typedef _CKey = ffi.Void Function(ffi.Int32);
 typedef _DKey = void Function(int);
 
-class MacOSBindings {
+class WindowsBindings {
   late final ffi.DynamicLibrary _lib;
   late final _DGetPos _getPos;
   late final _DMove _move;
@@ -45,7 +45,7 @@ class MacOSBindings {
   late final _DKey _keyDown;
   late final _DKey _keyUp;
 
-  MacOSBindings._(this._lib) {
+  WindowsBindings._(this._lib) {
     _getPos = _lib.lookupFunction<_CGetPos, _DGetPos>('dag_get_mouse_position');
     _move = _lib.lookupFunction<_CMove, _DMove>('dag_move_mouse');
     _mouseDown = _lib.lookupFunction<_CDownUp, _DDownUp>('dag_mouse_down');
@@ -61,14 +61,12 @@ class MacOSBindings {
     _keyUp = _lib.lookupFunction<_CKey, _DKey>('dag_key_up');
   }
 
-  static MacOSBindings load() {
-    if (!Platform.isMacOS) {
-      throw UnsupportedError('MacOSBindings can only be used on macOS');
+  static WindowsBindings load() {
+    if (!Platform.isWindows) {
+      throw UnsupportedError('WindowsBindings can only be used on Windows');
     }
-    final lib = ffi.DynamicLibrary.open(
-      'src/native/macos/libdart_autogui.dylib',
-    );
-    return MacOSBindings._(lib);
+    final lib = ffi.DynamicLibrary.open('dart_autogui.dll');
+    return WindowsBindings._(lib);
   }
 
   Point<double> mousePosition() {

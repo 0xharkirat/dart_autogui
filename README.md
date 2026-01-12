@@ -12,4 +12,37 @@
 - Capture screenshots and locate images on the screen
 - Works on Windows, macOS, and Linux
 
+## Installation
 
+1. Add the dependency:
+```yaml
+dependencies:
+  dart_autogui: ^1.0.0
+```
+
+2. **Setup Native Library**:
+   This package relies on a native shared library that must be built for your system.
+   Run the setup script to compile it (requires `cmake` and a C++ compiler):
+   
+   ```bash
+   dart run dart_autogui:setup
+   ```
+
+## Usage
+
+```dart
+import 'package:dart_autogui/dart_autogui.dart';
+
+void main() async {
+  // Move mouse
+  await Mouse.moveTo(100, 100);
+  
+  // Type text
+  await Keyboard.typeWrite('Hello World');
+}
+```
+
+## Requirements
+- **macOS**: Xcode Command Line Tools.
+- **Linux**: `libx11-dev`, `libxtst-dev`, `cmake`, `build-essential`.
+- **Windows**: Visual Studio (C++) or MinGW, `cmake`.

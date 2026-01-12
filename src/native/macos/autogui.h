@@ -3,10 +3,10 @@ extern "C" {
 #endif
 
 // Screen
-void dag_get_screen_size(double* width, double* height);
+void dag_get_screen_size(double *width, double *height);
 
 // Mouse position & move (absolute)
-void dag_get_mouse_position(double* x, double* y);
+void dag_get_mouse_position(double *x, double *y);
 void dag_move_mouse(double x, double y);
 
 // Buttons: 0=left, 1=right, 2=middle
@@ -23,6 +23,10 @@ void dag_hscroll(int delta_lines);
 
 // Permissions
 int dag_is_accessibility_trusted();
+
+// Keyboard
+void dag_key_down(int keycode);
+void dag_key_up(int keycode);
 
 #ifdef __cplusplus
 }

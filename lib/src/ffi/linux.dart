@@ -31,7 +31,10 @@ typedef _DIsTrusted = int Function();
 typedef _CKey = ffi.Void Function(ffi.Int32);
 typedef _DKey = void Function(int);
 
-class MacOSBindings {
+typedef _CKeySym = ffi.Int32 Function(ffi.Int32);
+typedef _DKeySym = int Function(int);
+
+class LinuxBindings {
   late final ffi.DynamicLibrary _lib;
   late final _DGetPos _getPos;
   late final _DMove _move;
@@ -44,8 +47,9 @@ class MacOSBindings {
   late final _DIsTrusted _isTrusted;
   late final _DKey _keyDown;
   late final _DKey _keyUp;
+  late final _DKeySym _keysymToKeycode;
 
-  MacOSBindings._(this._lib) {
+  LinuxBindings._(this._lib) {
     _getPos = _lib.lookupFunction<_CGetPos, _DGetPos>('dag_get_mouse_position');
     _move = _lib.lookupFunction<_CMove, _DMove>('dag_move_mouse');
     _mouseDown = _lib.lookupFunction<_CDownUp, _DDownUp>('dag_mouse_down');
@@ -59,16 +63,19 @@ class MacOSBindings {
     );
     _keyDown = _lib.lookupFunction<_CKey, _DKey>('dag_key_down');
     _keyUp = _lib.lookupFunction<_CKey, _DKey>('dag_key_up');
+    _keysymToKeycode = _lib.lookupFunction<_CKeySym, _DKeySym>(
+      'dag_keysym_to_keycode',
+    );
   }
 
-  static MacOSBindings load() {
-    if (!Platform.isMacOS) {
-      throw UnsupportedError('MacOSBindings can only be used on macOS');
+  static LinuxBindings load() {
+    if (!Platform.isLinux) {
+      throw UnsupportedError('LinuxBindings can only be used on Linux');
     }
-    final lib = ffi.DynamicLibrary.open(
-      'src/native/macos/libdart_autogui.dylib',
-    );
-    return MacOSBindings._(lib);
+    // Assumes libdart_autogui.so is in the path or same directory.
+    // In real release, might need more robust path finding.
+    final lib = ffi.DynamicLibrary.open('libdart_autogui.so');
+    return LinuxBindings._(lib);
   }
 
   Point<double> mousePosition() {
@@ -104,4 +111,5 @@ class MacOSBindings {
   bool isAccessibilityTrusted() => _isTrusted() == 1;
   void keyDown(int keycode) => _keyDown(keycode);
   void keyUp(int keycode) => _keyUp(keycode);
+  int keysymToKeycode(int keysym) => _keysymToKeycode(keysym);
 }

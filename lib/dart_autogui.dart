@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'src/platform.dart';
+export 'src/keyboard.dart';
 
 /// Easing function: t in [0,1] -> progress in [0,1]
 typedef Easing = double Function(double t);
@@ -84,8 +85,9 @@ class Mouse {
       final ny = start.y + (target.y - start.y) * tt;
       platformMouse.moveToAbsolute(nx, ny);
       final perStepMs = total ~/ steps;
-      if (perStepMs > 0)
+      if (perStepMs > 0) {
         await Future.delayed(Duration(milliseconds: perStepMs));
+      }
     }
   }
 
