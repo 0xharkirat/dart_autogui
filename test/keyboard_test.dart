@@ -1,5 +1,5 @@
-import 'package:dart_autogui/dart_autogui.dart';
-import 'package:dart_autogui/src/platform.dart';
+import 'package:autogui/autogui.dart';
+import 'package:autogui/src/platform.dart';
 import 'package:test/test.dart';
 
 import 'mocks/mock_platform.dart';

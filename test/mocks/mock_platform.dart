@@ -1,6 +1,6 @@
 import 'dart:math';
-import 'package:dart_autogui/src/platform.dart';
-import 'package:dart_autogui/src/keyboard.dart'; // For AutoGUIKey
+import 'package:autogui/src/platform.dart';
+import 'package:autogui/src/keyboard.dart'; // For AutoGUIKey
 
 class MockPlatformMouse implements PlatformMouse {
   final List<String> calls = [];

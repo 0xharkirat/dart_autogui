@@ -1,4 +1,4 @@
-import 'package:dart_autogui/dart_autogui.dart';
+import 'package:autogui/autogui.dart';
 import 'package:test/test.dart';
 
 void main() {

@@ -1,6 +1,6 @@
-# dart_autogui
+# autogui
 
-`dart_autogui` is a Dart package for cross-platform GUI automation. It enables you to programmatically control mouse and keyboard actions, take screenshots, and interact with the desktop—ideal for automation, testing, or scripting tasks.
+`autogui` is a Dart package for cross-platform GUI automation. It enables you to programmatically control mouse and keyboard actions, take screenshots, and interact with the desktop—ideal for automation, testing, or scripting tasks.
 
 **Note:** This package is under development. It is implemented purely in Dart using FFI bindings to C and platform-native interfaces. There are **no dependencies on Python or external runtimes**.
 
@@ -16,7 +16,7 @@
 1. Add the dependency:
 ```yaml
 dependencies:
-  dart_autogui: ^1.0.0
+  autogui: ^1.0.0
 ```
 
 2. **Setup Native Library**:
@@ -24,7 +24,7 @@ dependencies:
    Run the setup script to compile it (requires `cmake` and a C++ compiler):
    
    ```bash
-   dart run dart_autogui:setup
+   dart run autogui:setup
    ```
 
 ## Key Functions

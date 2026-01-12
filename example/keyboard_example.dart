@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:dart_autogui/dart_autogui.dart';
+import 'package:autogui/autogui.dart';
 
 Future<void> main() async {
   stdout.writeln('⚠️  Switch to a text editor! Starting in 3 seconds...');
