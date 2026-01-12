@@ -6,7 +6,7 @@ Future<void> main() async {
   if (!Mouse.isAccessibilityTrusted) {
     stderr.writeln(
       '⚠️  Accessibility missing. Enable your Terminal/IDE in:\n'
-      'System Settings → Privacy & Security → Accessibility\n'
+      'System Settings → Privacy & Security → Accessibility\n',
     );
   }
 
@@ -20,10 +20,17 @@ Future<void> main() async {
   // Also demonstrate the API once before loop:
   final size = Screen.size();
   stdout.writeln('Screen size: ${size.x} x ${size.y}');
-  stdout.writeln('onScreen(0,0) -> ${Screen.onScreen(0,0)}');
-  stdout.writeln('onScreen(${size.x},${size.y}) -> ${Screen.onScreen(size.x, size.y)} (expected false)');
+  stdout.writeln('onScreen(0,0) -> ${Screen.onScreen(0, 0)}');
+  stdout.writeln(
+    'onScreen(${size.x},${size.y}) -> ${Screen.onScreen(size.x, size.y)} (expected false)',
+  );
   await Mouse.moveTo(200, 200);
-  await Mouse.move(0, 80, duration: Duration(milliseconds: 300), easing: easeInOutQuad);
+  await Mouse.move(
+    0,
+    80,
+    duration: Duration(milliseconds: 300),
+    easing: easeInOutQuad,
+  );
   Mouse.doubleClick();
   Mouse.scroll(5);
   Mouse.hscroll(-4);
@@ -31,7 +38,8 @@ Future<void> main() async {
   // Live position printer (PyAutoGUI-style)
   while (true) {
     final p = Mouse.position();
-    final s = 'X: ${p.x.toStringAsFixed(0).padLeft(4)}  Y: ${p.y.toStringAsFixed(0).padLeft(4)}';
+    final s =
+        'X: ${p.x.toStringAsFixed(0).padLeft(4)}  Y: ${p.y.toStringAsFixed(0).padLeft(4)}';
     stdout.write('$s\r');
     await Future.delayed(Duration(milliseconds: 50));
   }
