@@ -50,13 +50,46 @@ void main(List<String> args) async {
 
   // 4. Copy to convenient location or inform user
   print('Build successful!');
-  print('Native library should be in ${buildDir.path}');
 
-  // Ideally, we move it to where FFI expects it, or we expect user to run from root.
-  // The current FFI impl loads from:
-  // Mac: src/native/macos/libdart_autogui.dylib OR straight name?
-  // Our code says: ffi.DynamicLibrary.open('src/native/macos/libdart_autogui.dylib');
-  // This is hardcoded for dev. We should likely allow it to search.
+  String libName;
+  if (Platform.isMacOS)
+    libName = 'libdart_autogui.dylib';
+  else if (Platform.isWindows)
+    libName = 'dart_autogui.dll';
+  else
+    libName = 'libdart_autogui.so';
+
+  // CMake build output is usually in build/ or build/Debug depending on generator
+  // We search for it.
+  final possiblePaths = [
+    '${buildDir.path}/$libName',
+    '${buildDir.path}/Debug/$libName',
+    '${buildDir.path}/Release/$libName',
+    '${buildDir.path}/src/native/macos/$libName', // Just in case cmake structure mimics source
+  ];
+
+  File? srcFile;
+  for (final p in possiblePaths) {
+    print('Checking for $p');
+    final f = File(p);
+    if (f.existsSync()) {
+      srcFile = f;
+      break;
+    }
+  }
+
+  if (srcFile != null) {
+    try {
+      final dest = '${root.path}/$libName';
+      srcFile.copySync(dest);
+      print('Copied library to $dest');
+    } catch (e) {
+      print('Could not copy library to root: $e');
+      print('Please manually copy ${srcFile.path} to your project root.');
+    }
+  } else {
+    print('Could not locate built library in build directory.');
+  }
 
   print('Setup complete. You can now use dart_autogui.');
 }

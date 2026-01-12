@@ -65,10 +65,22 @@ class MacOSBindings {
     if (!Platform.isMacOS) {
       throw UnsupportedError('MacOSBindings can only be used on macOS');
     }
-    final lib = ffi.DynamicLibrary.open(
-      'src/native/macos/libdart_autogui.dylib',
-    );
-    return MacOSBindings._(lib);
+    // Try development path first, then fallback to library name (user must have it in search path/local)
+    try {
+      return MacOSBindings._(
+        ffi.DynamicLibrary.open('src/native/macos/libdart_autogui.dylib'),
+      );
+    } catch (_) {
+      try {
+        return MacOSBindings._(
+          ffi.DynamicLibrary.open('libdart_autogui.dylib'),
+        );
+      } catch (e) {
+        throw UnsupportedError(
+          'Could not load libdart_autogui.dylib. Run dart_autogui:setup or ensure library is in path.',
+        );
+      }
+    }
   }
 
   Point<double> mousePosition() {

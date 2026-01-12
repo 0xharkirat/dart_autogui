@@ -9,7 +9,6 @@
 - Move and control the mouse
 - Perform mouse clicks and drags
 - Send keyboard input and shortcuts
-- Capture screenshots and locate images on the screen
 - Works on Windows, macOS, and Linux
 
 ## Installation

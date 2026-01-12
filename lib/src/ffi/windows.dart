@@ -65,8 +65,19 @@ class WindowsBindings {
     if (!Platform.isWindows) {
       throw UnsupportedError('WindowsBindings can only be used on Windows');
     }
-    final lib = ffi.DynamicLibrary.open('dart_autogui.dll');
-    return WindowsBindings._(lib);
+    try {
+      return WindowsBindings._(
+        ffi.DynamicLibrary.open('src/native/windows/dart_autogui.dll'),
+      );
+    } catch (_) {
+      try {
+        return WindowsBindings._(ffi.DynamicLibrary.open('dart_autogui.dll'));
+      } catch (e) {
+        throw UnsupportedError(
+          'Could not load dart_autogui.dll. Run dart_autogui:setup or ensure library is in path.',
+        );
+      }
+    }
   }
 
   Point<double> mousePosition() {

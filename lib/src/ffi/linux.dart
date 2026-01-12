@@ -72,10 +72,19 @@ class LinuxBindings {
     if (!Platform.isLinux) {
       throw UnsupportedError('LinuxBindings can only be used on Linux');
     }
-    // Assumes libdart_autogui.so is in the path or same directory.
-    // In real release, might need more robust path finding.
-    final lib = ffi.DynamicLibrary.open('libdart_autogui.so');
-    return LinuxBindings._(lib);
+    try {
+      return LinuxBindings._(
+        ffi.DynamicLibrary.open('src/native/linux/libdart_autogui.so'),
+      );
+    } catch (_) {
+      try {
+        return LinuxBindings._(ffi.DynamicLibrary.open('libdart_autogui.so'));
+      } catch (e) {
+        throw UnsupportedError(
+          'Could not load libdart_autogui.so. Run dart_autogui:setup or ensure library is in path.',
+        );
+      }
+    }
   }
 
   Point<double> mousePosition() {
