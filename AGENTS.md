@@ -201,8 +201,8 @@ Uses CoreGraphics/ApplicationServices to implement:
 
 Important caveat:
 
-- `dag_move_mouse()` emits the appropriate dragged event type while a mouse
-  button is held, and falls back to `kCGEventMouseMoved` otherwise.
+- `dag_move_mouse()` uses cursor warping for plain absolute movement and emits
+  the appropriate dragged event type while a mouse button is held.
 
 ### `src/native/linux/autogui.c`
 

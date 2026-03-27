@@ -70,7 +70,14 @@ void dag_get_mouse_position(double *x, double *y) {
 
 void dag_move_mouse(double x, double y) {
   CGPoint p = CGPointMake(x, y);
-  CGEventRef move = CGEventCreateMouseEvent(NULL, _moveType(), p, _btn(_activeButton));
+  if (_activeButton == -1) {
+    CGWarpMouseCursorPosition(p);
+    CGAssociateMouseAndMouseCursorPosition(true);
+    return;
+  }
+
+  CGEventRef move =
+      CGEventCreateMouseEvent(NULL, _moveType(), p, _btn(_activeButton));
   CGEventPost(kCGHIDEventTap, move);
   CFRelease(move);
 }
