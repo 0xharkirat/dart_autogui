@@ -101,3 +101,15 @@ EXPORT void dag_hscroll(int delta_lines) {
 EXPORT int dag_is_accessibility_trusted() {
   return 1; // Windows doesn't block mouse input typically unless UAC
 }
+
+void _sendKey(WORD keycode, DWORD flags) {
+  INPUT input = {0};
+  input.type = INPUT_KEYBOARD;
+  input.ki.wVk = keycode;
+  input.ki.dwFlags = flags;
+  SendInput(1, &input, sizeof(INPUT));
+}
+
+EXPORT void dag_key_down(int keycode) { _sendKey((WORD)keycode, 0); }
+
+EXPORT void dag_key_up(int keycode) { _sendKey((WORD)keycode, KEYEVENTF_KEYUP); }

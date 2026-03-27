@@ -53,11 +53,11 @@ void main(List<String> args) async {
 
   String libName;
   if (Platform.isMacOS) {
-    libName = 'libautogui.dylib';
+    libName = 'libdart_autogui.dylib';
   } else if (Platform.isWindows) {
-    libName = 'autogui.dll';
+    libName = 'dart_autogui.dll';
   } else {
-    libName = 'libautogui.so';
+    libName = 'libdart_autogui.so';
   }
 
   // CMake build output is usually in build/ or build/Debug depending on generator

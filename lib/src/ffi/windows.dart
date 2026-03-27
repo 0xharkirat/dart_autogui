@@ -42,8 +42,8 @@ class WindowsBindings {
   late final _DScroll _hscroll;
   late final _DSize _getScreenSize;
   late final _DIsTrusted _isTrusted;
-  late final _DKey _keyDown;
-  late final _DKey _keyUp;
+  late final _DKey? _keyDown;
+  late final _DKey? _keyUp;
 
   WindowsBindings._(this._lib) {
     _getPos = _lib.lookupFunction<_CGetPos, _DGetPos>('dag_get_mouse_position');
@@ -57,8 +57,16 @@ class WindowsBindings {
     _isTrusted = _lib.lookupFunction<_CIsTrusted, _DIsTrusted>(
       'dag_is_accessibility_trusted',
     );
-    _keyDown = _lib.lookupFunction<_CKey, _DKey>('dag_key_down');
-    _keyUp = _lib.lookupFunction<_CKey, _DKey>('dag_key_up');
+    try {
+      _keyDown = _lib.lookupFunction<_CKey, _DKey>('dag_key_down');
+    } catch (_) {
+      _keyDown = null;
+    }
+    try {
+      _keyUp = _lib.lookupFunction<_CKey, _DKey>('dag_key_up');
+    } catch (_) {
+      _keyUp = null;
+    }
   }
 
   static WindowsBindings load() {
@@ -111,6 +119,22 @@ class WindowsBindings {
   }
 
   bool isAccessibilityTrusted() => _isTrusted() == 1;
-  void keyDown(int keycode) => _keyDown(keycode);
-  void keyUp(int keycode) => _keyUp(keycode);
+
+  void keyDown(int keycode) {
+    if (_keyDown == null) {
+      throw UnsupportedError(
+        'Keyboard input is not currently available on Windows.',
+      );
+    }
+    _keyDown(keycode);
+  }
+
+  void keyUp(int keycode) {
+    if (_keyUp == null) {
+      throw UnsupportedError(
+        'Keyboard input is not currently available on Windows.',
+      );
+    }
+    _keyUp(keycode);
+  }
 }

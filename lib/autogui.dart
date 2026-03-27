@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'src/platform.dart';
 export 'src/keyboard.dart';
+export 'src/platform.dart' show MouseButton;
 
 /// Easing function: t in [0,1] -> progress in [0,1]
 typedef Easing = double Function(double t);

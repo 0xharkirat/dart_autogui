@@ -1,4 +1,5 @@
 #include <X11/Xlib.h>
+#include <X11/keysym.h>
 #include <X11/extensions/XTest.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -132,4 +133,28 @@ EXPORT int dag_is_accessibility_trusted() {
         return 1;
     }
     return 0;
+}
+
+EXPORT void dag_key_down(int keycode) {
+    Display* d = XOpenDisplay(NULL);
+    if (!d) return;
+    XTestFakeKeyEvent(d, (unsigned int)keycode, True, 0);
+    XFlush(d);
+    XCloseDisplay(d);
+}
+
+EXPORT void dag_key_up(int keycode) {
+    Display* d = XOpenDisplay(NULL);
+    if (!d) return;
+    XTestFakeKeyEvent(d, (unsigned int)keycode, False, 0);
+    XFlush(d);
+    XCloseDisplay(d);
+}
+
+EXPORT int dag_keysym_to_keycode(int keysym) {
+    Display* d = XOpenDisplay(NULL);
+    if (!d) return 0;
+    KeyCode code = XKeysymToKeycode(d, (KeySym)keysym);
+    XCloseDisplay(d);
+    return (int)code;
 }
