@@ -61,7 +61,7 @@ Use the `Keyboard` class to simulate key presses.
 - **`Keyboard.typeWrite(message, {intervalSec})`**: Types a string of characters.
   - `intervalSec`: Delay between each key press.
 - **`Keyboard.press(key)`**: Presses and releases a single key.
-  - usage: `Keyboard.press(AutoGUIKey.enter)` or `Keyboard.press(0x0D)` for a raw platform keycode.
+  - usage: `Keyboard.press(AutoGUIKey.enter)`, `Keyboard.press('a')`, or `Keyboard.press(0x0D)` for a raw platform keycode.
 - **`Keyboard.keyDown(key)`**: Holds a key down.
 - **`Keyboard.keyUp(key)`**: Releases a key.
 

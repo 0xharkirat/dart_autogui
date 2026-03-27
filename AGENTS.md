@@ -154,7 +154,8 @@ Loads `libdart_autogui.dylib` and looks up:
 - keyboard down/up
 
 This is the only platform where the required native symbols currently exist for
-both mouse and keyboard.
+both mouse and keyboard, but Linux and Windows now expose their basic keyboard
+entry points as well.
 
 ### `lib/src/ffi/linux.dart`
 
