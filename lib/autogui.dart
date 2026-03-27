@@ -40,10 +40,14 @@ double easeInElastic(double t) {
 }
 
 class Screen {
-  /// Returns (width, height) in pixels
+  /// Returns the primary screen size in pixels.
   static Point<int> size() => platformMouse.screenSize();
 
-  /// Checks if (x,y) is inside current screen bounds (0..w-1, 0..h-1)
+  /// Checks whether (x,y) lies within the primary screen bounds.
+  ///
+  /// On multi-monitor desktops, [Mouse.position] may return negative values
+  /// or values outside this range because coordinates are reported in the
+  /// global desktop space, not clamped to the primary display.
   static bool onScreen(num x, num y) {
     final s = size();
     return x >= 0 && y >= 0 && x < s.x && y < s.y;
@@ -54,6 +58,10 @@ class Mouse {
   static bool get isAccessibilityTrusted =>
       platformMouse.isAccessibilityTrusted();
 
+  /// Returns the current pointer position in global desktop coordinates.
+  ///
+  /// On multi-monitor setups this can be negative or extend beyond the primary
+  /// screen size reported by [Screen.size].
   static Point<double> position() => platformMouse.position();
 
   // --- movement -------------------------------------------------------

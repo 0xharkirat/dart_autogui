@@ -79,13 +79,12 @@ Important details:
 
 Important caveats:
 
-- `autogui.dart` imports `src/platform.dart` but only exports
-  `src/keyboard.dart`.
-- `Mouse` methods expose `MouseButton` in their signatures, but `MouseButton`
-  is not exported from the public barrel.
 - `Mouse.click()`, `Mouse.scroll()`, and `Mouse.hscroll()` call `moveTo()`
   without awaiting it. For zero-duration moves this is fine; for future
   non-zero-duration call sites this can create ordering surprises.
+- `Mouse.position()` reflects global desktop coordinates. On macOS multi-monitor
+  setups, negative values can be legitimate when another display sits left of or
+  above the primary display.
 
 ### `lib/src/keyboard.dart`
 
@@ -103,8 +102,8 @@ Behavior:
 
 Important caveats:
 
-- `_getKeyCode()` only accepts `int` and `AutoGUIKey`.
-- The README currently documents `Keyboard.press('a')`, but that does not work.
+- `_getKeyCode()` accepts `int`, `AutoGUIKey`, and single-character `String`
+  input.
 - Uppercase and symbol handling are incomplete; there is no generic Shift
   synthesis.
 - Unsupported characters are silently dropped instead of throwing.
@@ -202,10 +201,8 @@ Uses CoreGraphics/ApplicationServices to implement:
 
 Important caveat:
 
-- `dag_move_mouse()` always posts `kCGEventMouseMoved`.
-- Dragging in Dart is implemented by holding a button and repeatedly calling
-  this move function, so macOS drag gestures may not be recognized correctly by
-  all applications. Proper drag event types may be needed.
+- `dag_move_mouse()` emits the appropriate dragged event type while a mouse
+  button is held, and falls back to `kCGEventMouseMoved` otherwise.
 
 ### `src/native/linux/autogui.c`
 
@@ -217,10 +214,13 @@ Uses X11/XTest to implement:
 - mouse down/up/click
 - vertical/horizontal scroll
 - accessibility/trust-like display check
+- keyboard down/up
+- keysym-to-keycode translation
 
 Important caveat:
 
-- No keyboard functions are exported yet.
+- Keyboard input exists, but higher-level text entry remains limited by current
+  key mapping and layout assumptions.
 
 ### `src/native/windows/autogui.cpp`
 
@@ -232,10 +232,12 @@ Uses Win32 `SendInput` and `GetSystemMetrics` to implement:
 - mouse down/up/click
 - vertical/horizontal scroll
 - a trivial trust check
+- keyboard down/up
 
 Important caveat:
 
-- No keyboard functions are exported yet.
+- Keyboard input exists, but higher-level text entry remains limited by current
+  key mapping and layout assumptions.
 
 ### `CMakeLists.txt`
 
@@ -307,8 +309,9 @@ Important caveat:
 
 - Example success depends on platform permissions and on native behavior that is
   not covered by tests.
-- The keyboard example currently exercises text that includes uppercase and
-  punctuation, which the package does not robustly support across platforms.
+- The live mouse-position output uses global desktop coordinates. Negative
+  values can be expected on multi-monitor setups and should not automatically be
+  treated as a backend failure.
 
 ### `README.md` and `CHANGELOG.md`
 
@@ -677,6 +680,54 @@ dart run bin/setup.dart
 
 Use manual examples cautiously because they can move the mouse and type into the
 active application.
+
+## AI PR Review SOP
+
+Use this flow for any non-trivial branch before merge.
+
+When to open a PR:
+
+- open a PR once the branch has a coherent, reviewable change set
+- do not wait for perfect polish if the branch is ready for structured review
+- avoid opening PRs with unrelated fixes mixed together
+
+Self-review before requesting merge:
+
+1. review `git diff main..HEAD --stat`
+2. review `git diff main..HEAD`
+3. inspect changes by layer: public API, FFI, native, docs, tests
+4. check for drift between README, examples, and real behavior
+5. confirm new behavior has either automated coverage or a manual smoke-test note
+
+Validation to include in the PR description:
+
+- `dart analyze`
+- `dart test`
+- platform-specific smoke tests if native behavior changed
+- any environment blockers, such as missing local build tools
+
+Merge preconditions:
+
+- branch is clean
+- review finds no unresolved P0, P1, or P2 issues
+- validation results are recorded
+- residual risks are called out explicitly
+- branch scope still matches the PR title and description
+
+How to report residual risks:
+
+- state exactly what was not validated
+- distinguish tool/environment blockers from suspected code issues
+- call out platform-specific uncertainty separately
+- if a smoke test is partial or user-assisted, say so directly
+
+Merge guidance:
+
+- merge only after the self-review passes and any requested fixes are landed
+- prefer a clean, reviewed branch over rushing additional unrelated changes into
+  the same PR
+- after merge, switch back to `main`, fast-forward local `main` if needed, and
+  report the merged PR number, merge commit/reference, and any remaining risks
 
 ## Release Hygiene
 
