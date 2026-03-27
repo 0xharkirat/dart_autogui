@@ -33,8 +33,10 @@ dependencies:
 Use the `Mouse` class to control the cursor.
 
 - **`Screen.size()`**: Returns `Point<int>(width, height)` of the primary screen.
-- **`Mouse.position()`**: Returns `Point<double>(x, y)` of the current mouse position.
+- **`Mouse.position()`**: Returns `Point<double>(x, y)` of the current mouse position in global desktop coordinates.
 - **`Screen.onScreen(x, y)`**: Checks if coordinates are within the screen bounds.
+
+> **Note**: On multi-monitor macOS setups, `Mouse.position()` can legitimately return negative `x` or `y` values when the cursor is on a display positioned left of or above the primary display. `Screen.size()` and `Screen.onScreen()` currently describe the primary display only.
 
 #### Movement
 - **`Mouse.moveTo(x, y, {duration, easing})`**: Moves mouse to absolute coordinates.
