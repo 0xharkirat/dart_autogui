@@ -7,10 +7,10 @@ Future<void> main() async {
 
   stdout.writeln('Typing...');
 
-  await Keyboard.typeWrite('Hello from Dart AutoGUI!', intervalSec: 0.05);
+  await Keyboard.typeWrite('hello from dart autogui', intervalSec: 0.05);
   await Keyboard.press(AutoGUIKey.enter);
 
-  await Keyboard.typeWrite('Type with instant speed.');
+  await Keyboard.typeWrite('type with instant speed');
   await Keyboard.press(AutoGUIKey.enter);
 
   stdout.writeln('Done!');

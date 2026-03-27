@@ -1,6 +1,6 @@
 # autogui
 
-`autogui` is a Dart package for cross-platform GUI automation. It enables you to programmatically control mouse and keyboard actions, take screenshots, and interact with the desktop—ideal for automation, testing, or scripting tasks.
+`autogui` is a Dart package for cross-platform GUI automation. It enables you to programmatically control desktop mouse and keyboard actions from Dart using FFI and native platform APIs.
 
 **Note:** This package is under development. It is implemented purely in Dart using FFI bindings to C and platform-native interfaces. There are **no dependencies on Python or external runtimes**.
 
@@ -8,7 +8,7 @@
 
 - Move and control the mouse
 - Perform mouse clicks and drags
-- Send keyboard input and shortcuts
+- Send basic keyboard input
 - Works on Windows, macOS, and Linux
 
 ## Installation
@@ -32,9 +32,11 @@ dependencies:
 ### Mouse Control
 Use the `Mouse` class to control the cursor.
 
-- **`Mouse.size()`**: Returns `Point<int>(width, height)` of the primary screen.
-- **`Mouse.position()`**: Returns `Point<double>(x, y)` of the current mouse position.
-- **`Mouse.onScreen(x, y)`**: Checks if coordinates are within the screen bounds.
+- **`Screen.size()`**: Returns `Point<int>(width, height)` of the primary screen.
+- **`Mouse.position()`**: Returns `Point<double>(x, y)` of the current mouse position in global desktop coordinates.
+- **`Screen.onScreen(x, y)`**: Checks if coordinates are within the screen bounds.
+
+> **Note**: On multi-monitor macOS setups, `Mouse.position()` can legitimately return negative `x` or `y` values when the cursor is on a display positioned left of or above the primary display. `Screen.size()` and `Screen.onScreen()` currently describe the primary display only.
 
 #### Movement
 - **`Mouse.moveTo(x, y, {duration, easing})`**: Moves mouse to absolute coordinates.
@@ -48,8 +50,8 @@ Use the `Mouse` class to control the cursor.
 - **`Mouse.click({x, y, button, clicks, interval})`**: Clicks the mouse.
   - Supports `MouseButton.left`, `MouseButton.right`, `MouseButton.middle`.
   - `clicks`: 1 for single, 2 for double-click.
-- **`Mouse.down({button})`**: Presses and holds a mouse button.
-- **`Mouse.up({button})`**: Releases a mouse button.
+- **`Mouse.mouseDown({button})`**: Presses and holds a mouse button.
+- **`Mouse.mouseUp({button})`**: Releases a mouse button.
 - **`Mouse.scroll(clicks)`**: Scrolls vertically (positive = up, negative = down).
 - **`Mouse.hscroll(clicks)`**: Scrolls horizontally (positive = right, negative = left).
 
@@ -59,7 +61,7 @@ Use the `Keyboard` class to simulate key presses.
 - **`Keyboard.typeWrite(message, {intervalSec})`**: Types a string of characters.
   - `intervalSec`: Delay between each key press.
 - **`Keyboard.press(key)`**: Presses and releases a single key.
-  - usage: `Keyboard.press(AutoGUIKey.enter)` or `Keyboard.press('a')` (platform specific char mapping).
+  - usage: `Keyboard.press(AutoGUIKey.enter)`, `Keyboard.press('a')`, or `Keyboard.press(0x0D)` for a raw platform keycode.
 - **`Keyboard.keyDown(key)`**: Holds a key down.
 - **`Keyboard.keyUp(key)`**: Releases a key.
 
@@ -68,6 +70,12 @@ Use the `Keyboard` class to simulate key presses.
 - `shift`, `control`, `alt`, `cmd` (Meta/Super/Win)
 
 > **Note**: Character mapping (e.g. `typeWrite`) is currently basic and relies on standard US layout assumptions for some platforms.
+
+## Current Limitations
+
+- Mouse automation is the most complete part of the package.
+- Keyboard automation is available on macOS, Linux, and Windows, but text entry is still basic and layout-sensitive.
+- There is no screenshot or image-matching API in the current package.
 
 ## Requirements
 - **macOS**: Xcode Command Line Tools.

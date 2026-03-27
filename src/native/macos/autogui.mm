@@ -1,6 +1,8 @@
 #import <ApplicationServices/ApplicationServices.h>
 #import <unistd.h>
 
+static int _activeButton = -1;
+
 static CGMouseButton _btn(int b) {
   switch (b) {
   case 1:
@@ -31,6 +33,18 @@ static CGEventType _upType(int b) {
     return kCGEventLeftMouseUp;
   }
 }
+static CGEventType _moveType() {
+  switch (_activeButton) {
+  case 0:
+    return kCGEventLeftMouseDragged;
+  case 1:
+    return kCGEventRightMouseDragged;
+  case 2:
+    return kCGEventOtherMouseDragged;
+  default:
+    return kCGEventMouseMoved;
+  }
+}
 
 extern "C" {
 
@@ -56,8 +70,14 @@ void dag_get_mouse_position(double *x, double *y) {
 
 void dag_move_mouse(double x, double y) {
   CGPoint p = CGPointMake(x, y);
+  if (_activeButton == -1) {
+    CGWarpMouseCursorPosition(p);
+    CGAssociateMouseAndMouseCursorPosition(true);
+    return;
+  }
+
   CGEventRef move =
-      CGEventCreateMouseEvent(NULL, kCGEventMouseMoved, p, kCGMouseButtonLeft);
+      CGEventCreateMouseEvent(NULL, _moveType(), p, _btn(_activeButton));
   CGEventPost(kCGHIDEventTap, move);
   CFRelease(move);
 }
@@ -69,6 +89,7 @@ void dag_mouse_down(int button) {
   CGEventRef e =
       CGEventCreateMouseEvent(NULL, _downType(button), p, _btn(button));
   CGEventPost(kCGHIDEventTap, e);
+  _activeButton = button;
   CFRelease(e);
 }
 
@@ -79,6 +100,7 @@ void dag_mouse_up(int button) {
   CGEventRef e =
       CGEventCreateMouseEvent(NULL, _upType(button), p, _btn(button));
   CGEventPost(kCGHIDEventTap, e);
+  _activeButton = -1;
   CFRelease(e);
 }
 

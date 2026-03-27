@@ -36,6 +36,8 @@ Future<void> main() async {
   Mouse.hscroll(-4);
 
   // Live position printer (PyAutoGUI-style)
+  // These are global desktop coordinates. On multi-monitor setups they can be
+  // negative if a display sits left of or above the primary display.
   while (true) {
     final p = Mouse.position();
     final s =
