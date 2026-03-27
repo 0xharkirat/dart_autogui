@@ -18,7 +18,8 @@ enum AutoGUIKey {
 
 class Keyboard {
   /// Press a single key (down then up).
-  /// [key] can be an [AutoGUIKey] or an int (raw platform keycode).
+  /// [key] can be an [AutoGUIKey], an int (raw platform keycode),
+  /// or a single-character [String] when the current platform can map it.
   static Future<void> press(dynamic key, {Duration? interval}) async {
     keyDown(key);
     if (interval != null) await Future.delayed(interval);
@@ -68,6 +69,9 @@ class Keyboard {
 
   static int? _getKeyCode(dynamic key) {
     if (key is int) return key;
+    if (key is String && key.length == 1) {
+      return platformKeyboard.charToKeycode(key);
+    }
     if (key is AutoGUIKey) {
       return platformKeyboard.mapKey(key);
     }

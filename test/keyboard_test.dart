@@ -19,6 +19,11 @@ void main() {
       expect(mockKeyboard.calls, ['keyDown(1001)', 'keyUp(1001)']);
     });
 
+    test('press supports single-character strings', () async {
+      await Keyboard.press('a');
+      expect(mockKeyboard.calls, ['keyDown(97)', 'keyUp(97)']);
+    });
+
     test('typeWrite calls keyDown/Up for each char', () async {
       // Mock charToKeycode: 'A' -> 65
       await Keyboard.typeWrite('A');
