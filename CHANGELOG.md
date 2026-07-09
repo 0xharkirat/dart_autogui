@@ -1,3 +1,7 @@
+## 1.2.1
+
+- Fix `Mouse.mouseUp` so a screen-corner fail-safe can no longer strand a held button down mid-drag; releasing a button is never blocked.
+
 ## 1.2.0
 
 - `Mouse` actions (move, click, drag, scroll) now honor the screen-corner fail-safe, matching `Keyboard`.
