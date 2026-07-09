@@ -60,5 +60,14 @@ void main() {
       Mouse.click();
       expect(mockMouse.calls, contains('click(left, 1)'));
     });
+
+    test('mouseUp is never blocked by the fail-safe, even in a corner', () {
+      // Releasing a held button must always go through, or a corner-parked
+      // pointer could strand it down mid-drag.
+      FailSafe.enabled = true;
+      mockMouse.setPosition(0, 0);
+      Mouse.mouseUp();
+      expect(mockMouse.calls, contains('mouseUp(left)'));
+    });
   });
 }
