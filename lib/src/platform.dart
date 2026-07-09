@@ -318,6 +318,7 @@ class _MacKeyboard implements PlatformKeyboard {
     AutoGUIKey.pageDown: 0x79,
     AutoGUIKey.delete: 0x75, // Forward delete
     AutoGUIKey.help: 0x72,
+    AutoGUIKey.clear: 0x47, // kVK_ANSI_KeypadClear
     AutoGUIKey.num0: 0x52,
     AutoGUIKey.num1: 0x53,
     AutoGUIKey.num2: 0x54,
