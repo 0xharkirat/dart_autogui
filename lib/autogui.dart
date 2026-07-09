@@ -203,10 +203,10 @@ class Mouse {
     platformMouse.mouseDown(button);
   }
 
-  static void mouseUp({MouseButton button = MouseButton.left}) {
-    FailSafe.check();
-    platformMouse.mouseUp(button);
-  }
+  // No FailSafe.check() on release: a corner-parked pointer must not be able to
+  // strand a held button down mid-drag (mirrors Keyboard.keyUp).
+  static void mouseUp({MouseButton button = MouseButton.left}) =>
+      platformMouse.mouseUp(button);
 
   // --- scroll ---------------------------------------------------------
 
