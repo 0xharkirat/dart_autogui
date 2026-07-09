@@ -1,8 +1,6 @@
 import 'dart:io';
 import 'dart:math';
-import 'ffi/macos.dart';
-import 'ffi/linux.dart';
-import 'ffi/windows.dart';
+import 'ffi/bindings.dart';
 import 'keyboard.dart';
 
 enum MouseButton { left, right, middle }
@@ -24,6 +22,57 @@ abstract class PlatformKeyboard {
   void keyUp(int keycode);
   KeyStroke? charToKeyStroke(String char);
   int? mapKey(AutoGUIKey key);
+}
+
+/// Thrown when an automation action is aborted because the pointer is parked in
+/// a screen corner. See [FailSafe].
+class FailSafeException implements Exception {
+  const FailSafeException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'FailSafeException: $message';
+}
+
+/// Global fail-safe and pause settings, honored by both [Mouse] and [Keyboard]
+/// (PyAutoGUI's FAILSAFE / PAUSE). Slamming the pointer into a screen corner
+/// aborts the next action with a [FailSafeException] unless [enabled] is false.
+class FailSafe {
+  FailSafe._();
+
+  static bool enabled = true;
+  static Duration pause = Duration.zero;
+  static int padding = 0;
+
+  /// True when the pointer sits at a screen corner within [padding]. Matches an
+  /// exact corner point (not open-ended edges) so off-primary-monitor
+  /// coordinates - negative, or past the primary size - do not false-trigger.
+  static bool get triggered {
+    if (!enabled) return false;
+    final p = platformMouse.position();
+    final size = platformMouse.screenSize();
+    final pad = padding.toDouble();
+    final maxX = (size.x - 1).toDouble();
+    final maxY = (size.y - 1).toDouble();
+    bool near(double value, double target) => (value - target).abs() <= pad;
+    return (near(p.x, 0) || near(p.x, maxX)) &&
+        (near(p.y, 0) || near(p.y, maxY));
+  }
+
+  /// Throws [FailSafeException] if the pointer is in a corner.
+  static void check() {
+    if (!triggered) return;
+    throw const FailSafeException(
+      'Pointer is in a fail-safe corner. Move it away from the screen edge or '
+      'set Keyboard.failSafeEnabled = false to continue.',
+    );
+  }
+
+  /// Awaits [pause] after an action, if one is configured.
+  static Future<void> maybePause() async {
+    if (pause > Duration.zero) await Future.delayed(pause);
+  }
 }
 
 const Map<String, String> _shiftedBaseChars = {
@@ -86,78 +135,10 @@ int? controlCharKeysym(String char) {
   return null;
 }
 
-class _MacMouse implements PlatformMouse {
-  final _b = MacOSBindings.load();
+class _NativeMouse implements PlatformMouse {
+  _NativeMouse(this._b);
 
-  @override
-  Point<int> screenSize() => _b.screenSize();
-
-  @override
-  Point<double> position() => _b.mousePosition();
-
-  @override
-  void moveToAbsolute(double x, double y) => _b.moveTo(x, y);
-
-  @override
-  void mouseDown(MouseButton btn) => _b.mouseDown(btn.index);
-
-  @override
-  void mouseUp(MouseButton btn) => _b.mouseUp(btn.index);
-
-  @override
-  void click(MouseButton btn, {int clicks = 1, Duration? interval}) => _b.click(
-    btn.index,
-    clicks,
-    (interval ?? Duration.zero).inMilliseconds / 1000.0,
-  );
-
-  @override
-  void vscroll(int deltaLines) => _b.vscroll(deltaLines);
-
-  @override
-  void hscroll(int deltaLines) => _b.hscroll(deltaLines);
-
-  @override
-  bool isAccessibilityTrusted() => _b.isAccessibilityTrusted();
-}
-
-class _LinuxMouse implements PlatformMouse {
-  final _b = LinuxBindings.load();
-
-  @override
-  Point<int> screenSize() => _b.screenSize();
-
-  @override
-  Point<double> position() => _b.mousePosition();
-
-  @override
-  void moveToAbsolute(double x, double y) => _b.moveTo(x, y);
-
-  @override
-  void mouseDown(MouseButton btn) => _b.mouseDown(btn.index);
-
-  @override
-  void mouseUp(MouseButton btn) => _b.mouseUp(btn.index);
-
-  @override
-  void click(MouseButton btn, {int clicks = 1, Duration? interval}) => _b.click(
-    btn.index,
-    clicks,
-    (interval ?? Duration.zero).inMilliseconds / 1000.0,
-  );
-
-  @override
-  void vscroll(int deltaLines) => _b.vscroll(deltaLines);
-
-  @override
-  void hscroll(int deltaLines) => _b.hscroll(deltaLines);
-
-  @override
-  bool isAccessibilityTrusted() => _b.isAccessibilityTrusted();
-}
-
-class _WindowsMouse implements PlatformMouse {
-  final _b = WindowsBindings.load();
+  final NativeBindings _b;
 
   @override
   Point<int> screenSize() => _b.screenSize();
@@ -194,7 +175,10 @@ class _WindowsMouse implements PlatformMouse {
 // --- Keyboard Implementations ---
 
 class _MacKeyboard implements PlatformKeyboard {
-  final _b = MacOSBindings.load();
+  _MacKeyboard(this._b);
+
+  final NativeBindings _b;
+
   static const Map<String, int> _charMap = {
     'a': 0,
     's': 1,
@@ -341,7 +325,9 @@ class _MacKeyboard implements PlatformKeyboard {
 }
 
 class _LinuxKeyboard implements PlatformKeyboard {
-  final _b = LinuxBindings.load();
+  _LinuxKeyboard(this._b);
+
+  final NativeBindings _b;
 
   @override
   void keyDown(int keycode) => _b.keyDown(keycode);
@@ -458,7 +444,9 @@ class _LinuxKeyboard implements PlatformKeyboard {
 }
 
 class _WindowsKeyboard implements PlatformKeyboard {
-  final _b = WindowsBindings.load();
+  _WindowsKeyboard(this._b);
+
+  final NativeBindings _b;
 
   @override
   void keyDown(int keycode) => _b.keyDown(keycode);
@@ -604,18 +592,14 @@ set platformMouseInstance(PlatformMouse? mock) => _platformMouse = mock;
 set platformKeyboardInstance(PlatformKeyboard? mock) =>
     _platformKeyboard = mock;
 
-PlatformMouse get platformMouse {
-  if (_platformMouse != null) return _platformMouse!;
-  if (Platform.isMacOS) return _platformMouse = _MacMouse();
-  if (Platform.isLinux) return _platformMouse = _LinuxMouse();
-  if (Platform.isWindows) return _platformMouse = _WindowsMouse();
-  throw UnsupportedError('Platform not supported');
-}
+PlatformMouse get platformMouse =>
+    _platformMouse ??= _NativeMouse(NativeBindings.load());
 
 PlatformKeyboard get platformKeyboard {
   if (_platformKeyboard != null) return _platformKeyboard!;
-  if (Platform.isMacOS) return _platformKeyboard = _MacKeyboard();
-  if (Platform.isLinux) return _platformKeyboard = _LinuxKeyboard();
-  if (Platform.isWindows) return _platformKeyboard = _WindowsKeyboard();
+  final b = NativeBindings.load();
+  if (Platform.isMacOS) return _platformKeyboard = _MacKeyboard(b);
+  if (Platform.isLinux) return _platformKeyboard = _LinuxKeyboard(b);
+  if (Platform.isWindows) return _platformKeyboard = _WindowsKeyboard(b);
   throw UnsupportedError('Platform not supported');
 }
