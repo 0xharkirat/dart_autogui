@@ -1,3 +1,10 @@
+## 1.2.0
+
+- `Mouse` actions (move, click, drag, scroll) now honor the screen-corner fail-safe, matching `Keyboard`.
+- Add `Mouse.leftClick`, `Mouse.middleClick`, and a `Mouse.vscroll` alias.
+- Fail-safe and pause settings now live in a shared `FailSafe` class; `Keyboard.failSafeEnabled`, `pauseAfterAction`, and `failSafePadding` continue to work as before.
+- Internal: unify the three per-platform FFI binding files and mouse classes into one, with no public API change.
+
 ## 1.1.0
 
 - Expand `AutoGUIKey` to ~90 named keys (function keys F1-F24, arrows, navigation, editing, numpad, and left/right modifier variants) mapped per platform.
