@@ -24,6 +24,57 @@ abstract class PlatformKeyboard {
   int? mapKey(AutoGUIKey key);
 }
 
+/// Thrown when an automation action is aborted because the pointer is parked in
+/// a screen corner. See [FailSafe].
+class FailSafeException implements Exception {
+  const FailSafeException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'FailSafeException: $message';
+}
+
+/// Global fail-safe and pause settings, honored by both [Mouse] and [Keyboard]
+/// (PyAutoGUI's FAILSAFE / PAUSE). Slamming the pointer into a screen corner
+/// aborts the next action with a [FailSafeException] unless [enabled] is false.
+class FailSafe {
+  FailSafe._();
+
+  static bool enabled = true;
+  static Duration pause = Duration.zero;
+  static int padding = 0;
+
+  /// True when the pointer sits at a screen corner within [padding]. Matches an
+  /// exact corner point (not open-ended edges) so off-primary-monitor
+  /// coordinates - negative, or past the primary size - do not false-trigger.
+  static bool get triggered {
+    if (!enabled) return false;
+    final p = platformMouse.position();
+    final size = platformMouse.screenSize();
+    final pad = padding.toDouble();
+    final maxX = (size.x - 1).toDouble();
+    final maxY = (size.y - 1).toDouble();
+    bool near(double value, double target) => (value - target).abs() <= pad;
+    return (near(p.x, 0) || near(p.x, maxX)) &&
+        (near(p.y, 0) || near(p.y, maxY));
+  }
+
+  /// Throws [FailSafeException] if the pointer is in a corner.
+  static void check() {
+    if (!triggered) return;
+    throw const FailSafeException(
+      'Pointer is in a fail-safe corner. Move it away from the screen edge or '
+      'set Keyboard.failSafeEnabled = false to continue.',
+    );
+  }
+
+  /// Awaits [pause] after an action, if one is configured.
+  static Future<void> maybePause() async {
+    if (pause > Duration.zero) await Future.delayed(pause);
+  }
+}
+
 const Map<String, String> _shiftedBaseChars = {
   '!': '1',
   '@': '2',

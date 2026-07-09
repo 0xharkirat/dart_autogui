@@ -211,26 +211,21 @@ class KeyStroke {
   final List<AutoGUIKey> modifiers;
 }
 
-class FailSafeException implements Exception {
-  const FailSafeException(this.message);
-
-  final String message;
-
-  @override
-  String toString() => 'FailSafeException: $message';
-}
-
 class Keyboard {
-  /// When enabled, keyboard actions abort if the pointer is in a fail-safe corner.
-  static bool failSafeEnabled = true;
+  /// When enabled, actions abort if the pointer is in a fail-safe corner.
+  /// Forwards to the shared [FailSafe.enabled] (honored by [Mouse] too).
+  static bool get failSafeEnabled => FailSafe.enabled;
+  static set failSafeEnabled(bool value) => FailSafe.enabled = value;
 
-  /// Additional delay applied after async keyboard actions.
-  static Duration pauseAfterAction = Duration.zero;
+  /// Delay applied after async keyboard actions. Forwards to [FailSafe.pause].
+  static Duration get pauseAfterAction => FailSafe.pause;
+  static set pauseAfterAction(Duration value) => FailSafe.pause = value;
 
-  /// Corner padding used for fail-safe detection.
-  static int failSafePadding = 0;
+  /// Corner padding used for fail-safe detection. Forwards to [FailSafe.padding].
+  static int get failSafePadding => FailSafe.padding;
+  static set failSafePadding(int value) => FailSafe.padding = value;
 
-  static bool get isFailSafeTriggered => _isFailSafeTriggered();
+  static bool get isFailSafeTriggered => FailSafe.triggered;
 
   /// The named keys accepted by [press], [keyDown], [hotkey], etc., mirroring
   /// PyAutoGUI's `KEY_NAMES`. Single characters (e.g. `'a'`, `'!'`) are also
@@ -263,12 +258,12 @@ class Keyboard {
     // fail-safe is re-checked before every press, and [interval] is a gap
     // *after* each press.
     for (int i = 0; i < presses; i++) {
-      _checkFailSafe();
+      FailSafe.check();
       _applyKeyDown(stroke);
       _applyKeyUp(stroke);
       if (interval != null) await Future.delayed(interval);
     }
-    await _pauseIfNeeded();
+    await FailSafe.maybePause();
   }
 
   /// Type a string [message] one character at a time. Alias for [write].
@@ -292,17 +287,17 @@ class Keyboard {
   }) async {
     for (int i = 0; i < message.length; i++) {
       // Re-check per character so a mid-string fail-safe corner still aborts.
-      _checkFailSafe();
+      FailSafe.check();
       _typeChar(message[i]);
       if (interval > Duration.zero) {
         await Future.delayed(interval);
       }
     }
-    await _pauseIfNeeded();
+    await FailSafe.maybePause();
   }
 
   static void keyDown(dynamic key) {
-    _checkFailSafe();
+    FailSafe.check();
     _applyKeyDown(_requireKeyStroke(key));
   }
 
@@ -312,7 +307,7 @@ class Keyboard {
 
   static Future<void> hotkey(List<dynamic> keys, {Duration? interval}) async {
     if (keys.isEmpty) return;
-    _checkFailSafe();
+    FailSafe.check();
     final strokes = keys.map(_requireKeyStroke).toList(growable: false);
     for (final stroke in strokes) {
       _applyKeyDown(stroke);
@@ -322,7 +317,7 @@ class Keyboard {
       _applyKeyUp(stroke);
       if (interval != null) await Future.delayed(interval);
     }
-    await _pauseIfNeeded();
+    await FailSafe.maybePause();
   }
 
   static Future<void> keyChord(List<dynamic> keys, {Duration? interval}) =>
@@ -330,13 +325,13 @@ class Keyboard {
 
   static Future<T> hold<T>(dynamic key, FutureOr<T> Function() action) async {
     final stroke = _requireKeyStroke(key);
-    _checkFailSafe();
+    FailSafe.check();
     _applyKeyDown(stroke);
     try {
       return await action();
     } finally {
       _applyKeyUp(stroke);
-      await _pauseIfNeeded();
+      await FailSafe.maybePause();
     }
   }
 
@@ -391,37 +386,6 @@ class Keyboard {
         throw UnsupportedError('Unsupported modifier key: $modifier');
       }
       platformKeyboard.keyUp(modifierCode);
-    }
-  }
-
-  static void _checkFailSafe() {
-    if (!_isFailSafeTriggered()) return;
-    throw const FailSafeException(
-      'Pointer is in a fail-safe corner. Move it away from the screen edge or disable Keyboard.failSafeEnabled to continue.',
-    );
-  }
-
-  static bool _isFailSafeTriggered() {
-    if (!failSafeEnabled) return false;
-    final p = platformMouse.position();
-    final size = platformMouse.screenSize();
-    final pad = failSafePadding.toDouble();
-    final maxX = (size.x - 1).toDouble();
-    final maxY = (size.y - 1).toDouble();
-    // Match a corner *point* within [failSafePadding], like PyAutoGUI's
-    // FAILSAFE_POINTS. Open-ended edge bands (p.x <= pad, p.x >= maxX - pad)
-    // false-triggered on multi-monitor layouts, where the pointer legitimately
-    // reports negative coordinates (a display left/above the primary) or
-    // coordinates past the primary size (a display right/below it).
-    bool near(double value, double target) => (value - target).abs() <= pad;
-    final atLeftOrRight = near(p.x, 0) || near(p.x, maxX);
-    final atTopOrBottom = near(p.y, 0) || near(p.y, maxY);
-    return atLeftOrRight && atTopOrBottom;
-  }
-
-  static Future<void> _pauseIfNeeded() async {
-    if (pauseAfterAction > Duration.zero) {
-      await Future.delayed(pauseAfterAction);
     }
   }
 }

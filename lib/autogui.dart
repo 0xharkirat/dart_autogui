@@ -1,7 +1,7 @@
 import 'dart:math';
 import 'src/platform.dart';
 export 'src/keyboard.dart';
-export 'src/platform.dart' show MouseButton;
+export 'src/platform.dart' show MouseButton, FailSafe, FailSafeException;
 
 /// Easing function: t in [0,1] -> progress in [0,1]
 typedef Easing = double Function(double t);
@@ -74,6 +74,7 @@ class Mouse {
     Easing easing = easeLinear,
     int steps = 60,
   }) async {
+    FailSafe.check();
     final start = position();
     final target = Point<double>(
       x?.toDouble() ?? start.x,
@@ -161,6 +162,7 @@ class Mouse {
     int clicks = 1,
     Duration? interval,
   }) {
+    FailSafe.check();
     if (x != null || y != null) {
       final p = position();
       moveTo(x ?? p.x, y ?? p.y);
@@ -190,15 +192,27 @@ class Mouse {
     interval: interval,
   );
 
-  static void mouseDown({MouseButton button = MouseButton.left}) =>
-      platformMouse.mouseDown(button);
-  static void mouseUp({MouseButton button = MouseButton.left}) =>
-      platformMouse.mouseUp(button);
+  static void leftClick({int? x, int? y, Duration? interval}) =>
+      click(x: x, y: y, button: MouseButton.left, interval: interval);
+
+  static void middleClick({int? x, int? y, Duration? interval}) =>
+      click(x: x, y: y, button: MouseButton.middle, interval: interval);
+
+  static void mouseDown({MouseButton button = MouseButton.left}) {
+    FailSafe.check();
+    platformMouse.mouseDown(button);
+  }
+
+  static void mouseUp({MouseButton button = MouseButton.left}) {
+    FailSafe.check();
+    platformMouse.mouseUp(button);
+  }
 
   // --- scroll ---------------------------------------------------------
 
   /// Vertical scroll in "lines" (positive = up, negative = down)
   static void scroll(int clicks, {int? x, int? y}) {
+    FailSafe.check();
     if (x != null || y != null) {
       final p = position();
       moveTo(x ?? p.x, y ?? p.y);
@@ -206,8 +220,13 @@ class Mouse {
     platformMouse.vscroll(clicks);
   }
 
+  /// Alias for [scroll].
+  static void vscroll(int clicks, {int? x, int? y}) =>
+      scroll(clicks, x: x, y: y);
+
   /// Horizontal scroll in "lines" (positive = right, negative = left)
   static void hscroll(int clicks, {int? x, int? y}) {
+    FailSafe.check();
     if (x != null || y != null) {
       final p = position();
       moveTo(x ?? p.x, y ?? p.y);
@@ -215,3 +234,7 @@ class Mouse {
     platformMouse.hscroll(clicks);
   }
 }
+
+// ponytail: mouse actions run FailSafe.check() (sync) but skip FailSafe.pause -
+// wiring pauseAfterAction into the sync click/scroll/mouseDown API would make
+// them Future-returning and break callers. Add if PAUSE-after-mouse is needed.
