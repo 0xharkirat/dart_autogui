@@ -54,9 +54,12 @@ void main() {
     test('press repeats without holding the key for presses > 1', () async {
       await Keyboard.press('a', presses: 3);
       expect(mockKeyboard.calls, [
-        'keyDown(97)', 'keyUp(97)',
-        'keyDown(97)', 'keyUp(97)',
-        'keyDown(97)', 'keyUp(97)',
+        'keyDown(97)',
+        'keyUp(97)',
+        'keyDown(97)',
+        'keyUp(97)',
+        'keyDown(97)',
+        'keyUp(97)',
       ]);
     });
 
@@ -135,24 +138,100 @@ void main() {
       expect(() => Keyboard.press('a'), throwsA(isA<FailSafeException>()));
     });
 
-    test('fail-safe does not trigger off-primary-monitor coordinates', () async {
-      // A display left/above the primary reports negative coordinates; one
-      // right/below reports coordinates past the primary size. Neither is a
-      // corner point, so keyboard actions must not abort.
-      mockMouse.setPosition(-800, -100);
-      await Keyboard.press('a');
-      mockMouse.setPosition(3000, 1500);
-      await Keyboard.press('a');
-      expect(mockKeyboard.calls, [
-        'keyDown(97)', 'keyUp(97)',
-        'keyDown(97)', 'keyUp(97)',
-      ]);
-    });
+    test(
+      'fail-safe does not trigger off-primary-monitor coordinates',
+      () async {
+        // A display left/above the primary reports negative coordinates; one
+        // right/below reports coordinates past the primary size. Neither is a
+        // corner point, so keyboard actions must not abort.
+        mockMouse.setPosition(-800, -100);
+        await Keyboard.press('a');
+        mockMouse.setPosition(3000, 1500);
+        await Keyboard.press('a');
+        expect(mockKeyboard.calls, [
+          'keyDown(97)',
+          'keyUp(97)',
+          'keyDown(97)',
+          'keyUp(97)',
+        ]);
+      },
+    );
 
     test('fail-safe triggers at the bottom-right primary corner', () async {
       // screenSize is 1920x1080 -> corner point (1919, 1079).
       mockMouse.setPosition(1919, 1079);
       expect(() => Keyboard.press('a'), throwsA(isA<FailSafeException>()));
+    });
+  });
+
+  group('Named key resolution', () {
+    // The mock maps every AutoGUIKey to (1000 + index), so expected codes are
+    // derived from the enum rather than hard-coded.
+    String down(AutoGUIKey k) => 'keyDown(${1000 + k.index})';
+    String up(AutoGUIKey k) => 'keyUp(${1000 + k.index})';
+
+    test('press resolves a named key string', () async {
+      await Keyboard.press('f1');
+      expect(mockKeyboard.calls, [down(AutoGUIKey.f1), up(AutoGUIKey.f1)]);
+    });
+
+    test('press resolves navigation and editing names', () async {
+      await Keyboard.press('pageup');
+      await Keyboard.press('delete');
+      expect(mockKeyboard.calls, [
+        down(AutoGUIKey.pageUp),
+        up(AutoGUIKey.pageUp),
+        down(AutoGUIKey.delete),
+        up(AutoGUIKey.delete),
+      ]);
+    });
+
+    test('named-key lookup is case-insensitive and honors aliases', () async {
+      // 'RETURN' -> enter, 'ESC' -> escape, 'pgdn' -> pageDown.
+      await Keyboard.press('RETURN');
+      await Keyboard.press('Esc');
+      await Keyboard.press('pgdn');
+      expect(mockKeyboard.calls, [
+        down(AutoGUIKey.enter),
+        up(AutoGUIKey.enter),
+        down(AutoGUIKey.escape),
+        up(AutoGUIKey.escape),
+        down(AutoGUIKey.pageDown),
+        up(AutoGUIKey.pageDown),
+      ]);
+    });
+
+    test('hotkey accepts pyautogui-style string names', () async {
+      await Keyboard.hotkey(['ctrl', 'shift', 'c']);
+      expect(mockKeyboard.calls, [
+        down(AutoGUIKey.control),
+        down(AutoGUIKey.shift),
+        'keyDown(99)',
+        'keyUp(99)',
+        up(AutoGUIKey.shift),
+        up(AutoGUIKey.control),
+      ]);
+    });
+
+    test('press throws on an unknown key name', () {
+      expect(() => Keyboard.press('notakey'), throwsA(isA<UnsupportedError>()));
+    });
+
+    test('isValidKey accepts names, chars, enums and ints', () {
+      expect(Keyboard.isValidKey('f1'), isTrue);
+      expect(Keyboard.isValidKey('a'), isTrue);
+      expect(Keyboard.isValidKey(AutoGUIKey.up), isTrue);
+      expect(Keyboard.isValidKey(42), isTrue);
+      expect(Keyboard.isValidKey('notakey'), isFalse);
+      expect(Keyboard.isValidKey(''), isFalse);
+    });
+
+    test('keyboardKeys is sorted and holds named keys only', () {
+      final keys = Keyboard.keyboardKeys;
+      expect(keys, containsAll(['enter', 'f1', 'pgup', 'up', 'numlock']));
+      expect(keys, isNot(contains('a')));
+      final sorted = [...keys]..sort();
+      expect(keys, sorted);
     });
   });
 

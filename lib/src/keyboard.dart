@@ -1,10 +1,15 @@
 import 'dart:async';
 import 'platform.dart';
 
-// Very abbreviated Key mapping.
-// Ideally, we'd have a full enum. For now, we support raw codes or a few named ones.
-
+/// Named keyboard keys, mirroring PyAutoGUI's `KEY_NAMES`.
+///
+/// A key's availability is platform-specific: values missing from a platform's
+/// map (for example [f21]-[f24], [insert] and [numLock] on macOS) resolve to
+/// `null` and are rejected by [Keyboard.isValidKey] on that platform. New
+/// values are appended rather than reordered so existing enum indices stay
+/// stable.
 enum AutoGUIKey {
+  // Core keys.
   enter,
   space,
   tab,
@@ -14,7 +19,190 @@ enum AutoGUIKey {
   control,
   alt,
   cmd, // Command/Meta/Win
+  // Modifier variants.
+  shiftLeft,
+  shiftRight,
+  controlLeft,
+  controlRight,
+  altLeft,
+  altRight,
+  winLeft,
+  winRight,
+  fn,
+  capsLock,
+  numLock,
+  scrollLock,
+
+  // Function keys.
+  f1,
+  f2,
+  f3,
+  f4,
+  f5,
+  f6,
+  f7,
+  f8,
+  f9,
+  f10,
+  f11,
+  f12,
+  f13,
+  f14,
+  f15,
+  f16,
+  f17,
+  f18,
+  f19,
+  f20,
+  f21,
+  f22,
+  f23,
+  f24,
+
+  // Arrows.
+  up,
+  down,
+  left,
+  right,
+
+  // Navigation.
+  home,
+  end,
+  pageUp,
+  pageDown,
+
+  // Editing / system.
+  insert,
+  delete,
+  clear,
+  select,
+  execute,
+  printScreen,
+  pause,
+  menu,
+  help,
+
+  // Numpad.
+  num0,
+  num1,
+  num2,
+  num3,
+  num4,
+  num5,
+  num6,
+  num7,
+  num8,
+  num9,
+  numMultiply,
+  numAdd,
+  numSubtract,
+  numDecimal,
+  numDivide,
+  numSeparator,
 }
+
+/// PyAutoGUI-compatible key names (and their aliases) mapped to [AutoGUIKey].
+///
+/// Single-character keys (`'a'`, `'!'`, `' '`) are intentionally absent: those
+/// resolve through platform char-to-keystroke mapping so they carry the right
+/// Shift modifier. Lookups are lower-cased before hitting this table.
+const Map<String, AutoGUIKey> _keyNames = {
+  'enter': AutoGUIKey.enter,
+  'return': AutoGUIKey.enter,
+  'space': AutoGUIKey.space,
+  'tab': AutoGUIKey.tab,
+  'esc': AutoGUIKey.escape,
+  'escape': AutoGUIKey.escape,
+  'backspace': AutoGUIKey.backspace,
+  'shift': AutoGUIKey.shift,
+  'shiftleft': AutoGUIKey.shiftLeft,
+  'shiftright': AutoGUIKey.shiftRight,
+  'ctrl': AutoGUIKey.control,
+  'control': AutoGUIKey.control,
+  'ctrlleft': AutoGUIKey.controlLeft,
+  'ctrlright': AutoGUIKey.controlRight,
+  'alt': AutoGUIKey.alt,
+  'option': AutoGUIKey.alt,
+  'altleft': AutoGUIKey.altLeft,
+  'optionleft': AutoGUIKey.altLeft,
+  'altright': AutoGUIKey.altRight,
+  'optionright': AutoGUIKey.altRight,
+  'cmd': AutoGUIKey.cmd,
+  'command': AutoGUIKey.cmd,
+  'win': AutoGUIKey.cmd,
+  'super': AutoGUIKey.cmd,
+  'winleft': AutoGUIKey.winLeft,
+  'winright': AutoGUIKey.winRight,
+  'fn': AutoGUIKey.fn,
+  'capslock': AutoGUIKey.capsLock,
+  'numlock': AutoGUIKey.numLock,
+  'scrolllock': AutoGUIKey.scrollLock,
+  'f1': AutoGUIKey.f1,
+  'f2': AutoGUIKey.f2,
+  'f3': AutoGUIKey.f3,
+  'f4': AutoGUIKey.f4,
+  'f5': AutoGUIKey.f5,
+  'f6': AutoGUIKey.f6,
+  'f7': AutoGUIKey.f7,
+  'f8': AutoGUIKey.f8,
+  'f9': AutoGUIKey.f9,
+  'f10': AutoGUIKey.f10,
+  'f11': AutoGUIKey.f11,
+  'f12': AutoGUIKey.f12,
+  'f13': AutoGUIKey.f13,
+  'f14': AutoGUIKey.f14,
+  'f15': AutoGUIKey.f15,
+  'f16': AutoGUIKey.f16,
+  'f17': AutoGUIKey.f17,
+  'f18': AutoGUIKey.f18,
+  'f19': AutoGUIKey.f19,
+  'f20': AutoGUIKey.f20,
+  'f21': AutoGUIKey.f21,
+  'f22': AutoGUIKey.f22,
+  'f23': AutoGUIKey.f23,
+  'f24': AutoGUIKey.f24,
+  'up': AutoGUIKey.up,
+  'down': AutoGUIKey.down,
+  'left': AutoGUIKey.left,
+  'right': AutoGUIKey.right,
+  'home': AutoGUIKey.home,
+  'end': AutoGUIKey.end,
+  'pageup': AutoGUIKey.pageUp,
+  'pgup': AutoGUIKey.pageUp,
+  'pagedown': AutoGUIKey.pageDown,
+  'pgdn': AutoGUIKey.pageDown,
+  'insert': AutoGUIKey.insert,
+  'del': AutoGUIKey.delete,
+  'delete': AutoGUIKey.delete,
+  'clear': AutoGUIKey.clear,
+  'select': AutoGUIKey.select,
+  'execute': AutoGUIKey.execute,
+  'printscreen': AutoGUIKey.printScreen,
+  'prtsc': AutoGUIKey.printScreen,
+  'prtscr': AutoGUIKey.printScreen,
+  'prntscrn': AutoGUIKey.printScreen,
+  'print': AutoGUIKey.printScreen,
+  'pause': AutoGUIKey.pause,
+  'apps': AutoGUIKey.menu,
+  'menu': AutoGUIKey.menu,
+  'help': AutoGUIKey.help,
+  'num0': AutoGUIKey.num0,
+  'num1': AutoGUIKey.num1,
+  'num2': AutoGUIKey.num2,
+  'num3': AutoGUIKey.num3,
+  'num4': AutoGUIKey.num4,
+  'num5': AutoGUIKey.num5,
+  'num6': AutoGUIKey.num6,
+  'num7': AutoGUIKey.num7,
+  'num8': AutoGUIKey.num8,
+  'num9': AutoGUIKey.num9,
+  'multiply': AutoGUIKey.numMultiply,
+  'add': AutoGUIKey.numAdd,
+  'subtract': AutoGUIKey.numSubtract,
+  'decimal': AutoGUIKey.numDecimal,
+  'divide': AutoGUIKey.numDivide,
+  'separator': AutoGUIKey.numSeparator,
+};
 
 class KeyStroke {
   const KeyStroke(this.keycode, {this.modifiers = const []});
@@ -43,6 +231,21 @@ class Keyboard {
   static int failSafePadding = 0;
 
   static bool get isFailSafeTriggered => _isFailSafeTriggered();
+
+  /// The named keys accepted by [press], [keyDown], [hotkey], etc., mirroring
+  /// PyAutoGUI's `KEY_NAMES`. Single characters (e.g. `'a'`, `'!'`) are also
+  /// valid inputs but are not listed here. Availability of a named key varies
+  /// by platform - check [isValidKey] for the running platform.
+  static List<String> get keyboardKeys =>
+      _keyNames.keys.toList(growable: false)..sort();
+
+  /// Whether [key] resolves to something typeable on the current platform.
+  ///
+  /// Accepts the same inputs as [press]: an [AutoGUIKey], a raw int keycode, a
+  /// single character, or a named key string. Returns false for unknown names
+  /// and for named keys the current platform has no keycode for (e.g. `'f21'`
+  /// on macOS).
+  static bool isValidKey(dynamic key) => _getKeyStroke(key) != null;
 
   /// Press a single key (down then up).
   /// [key] can be an [AutoGUIKey], an int (raw platform keycode),
@@ -146,11 +349,18 @@ class Keyboard {
 
   static KeyStroke? _getKeyStroke(dynamic key) {
     if (key is int) return KeyStroke(key);
-    if (key is String && key.length == 1) {
-      return platformKeyboard.charToKeyStroke(key);
-    }
     if (key is AutoGUIKey) {
       final keycode = platformKeyboard.mapKey(key);
+      if (keycode == null) return null;
+      return KeyStroke(keycode);
+    }
+    if (key is String) {
+      // A single character types through the layout (carrying Shift as needed);
+      // a longer string is a named key like 'enter', 'f1', or 'pageup'.
+      if (key.length == 1) return platformKeyboard.charToKeyStroke(key);
+      final named = _keyNames[key.toLowerCase()];
+      if (named == null) return null;
+      final keycode = platformKeyboard.mapKey(named);
       if (keycode == null) return null;
       return KeyStroke(keycode);
     }
