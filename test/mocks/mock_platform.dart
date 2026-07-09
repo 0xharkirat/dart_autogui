@@ -6,6 +6,10 @@ class MockPlatformMouse implements PlatformMouse {
   final List<String> calls = [];
   Point<double> _pos = Point(0, 0);
 
+  void setPosition(double x, double y) {
+    _pos = Point(x, y);
+  }
+
   @override
   Point<int> screenSize() {
     calls.add('screenSize');
@@ -70,9 +74,15 @@ class MockPlatformKeyboard implements PlatformKeyboard {
   }
 
   @override
-  int? charToKeycode(String char) {
-    // Mock mapping: char code
-    return char.codeUnitAt(0);
+  KeyStroke? charToKeyStroke(String char) {
+    if (char.length != 1) return null;
+    // Reuse the real shared helpers so tests exercise the actual shift/base
+    // logic (uppercase *and* shifted punctuation), not a mock reimplementation.
+    // The base char's code unit stands in for a platform keycode.
+    return KeyStroke(
+      baseChar(char).codeUnitAt(0),
+      modifiers: requiresShift(char) ? const [AutoGUIKey.shift] : const [],
+    );
   }
 
   @override
