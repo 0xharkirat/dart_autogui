@@ -255,10 +255,13 @@ class Keyboard {
     Duration? interval,
     int presses = 1,
   }) async {
+    // Non-positive [presses] is a no-op (PyAutoGUI parity): guard before
+    // resolving so an unsupported key can't throw when nothing is pressed.
+    if (presses < 1) return;
     final stroke = _requireKeyStroke(key);
-    // Matches PyAutoGUI: a non-positive [presses] is a no-op, each press is a
-    // discrete down/up (the key is never held for [interval]), fail-safe is
-    // re-checked before every press, and [interval] is a gap *after* each press.
+    // Each press is a discrete down/up (the key is never held for [interval]),
+    // fail-safe is re-checked before every press, and [interval] is a gap
+    // *after* each press.
     for (int i = 0; i < presses; i++) {
       _checkFailSafe();
       _applyKeyDown(stroke);
@@ -268,9 +271,11 @@ class Keyboard {
     await _pauseIfNeeded();
   }
 
-  /// Type a string [message]. Currently only supports ASCII characters that map simply.
-  /// Complex mapping (uppercase, symbols) requires generic layout awareness which is hard.
-  /// This is a basic implementation.
+  /// Type a string [message] one character at a time. Alias for [write].
+  ///
+  /// Uppercase letters and shifted punctuation are typed as base key + Shift on
+  /// a US layout; non-ASCII characters and other layouts are not supported.
+  /// [intervalSec] adds a delay in seconds between characters.
   static Future<void> typeWrite(
     String message, {
     double intervalSec = 0.0,
