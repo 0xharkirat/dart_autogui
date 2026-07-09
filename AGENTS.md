@@ -15,9 +15,45 @@ The package is currently closer to an early prototype than a finished
 cross-platform library. Treat the current code as a functional skeleton with
 real platform glue, not as a stable or complete API.
 
+## Release Workflow (required)
+
+Follow this for every change and every pub.dev release:
+
+1. Do all feature, fix, and refactor work on a topic branch, then merge it to
+   `main` via a PR (`gh pr merge <n> --merge --delete-branch`). Always merge to
+   `main` first. Never publish from a feature branch.
+2. To cut a pub.dev release, branch from the updated `main` into a dedicated
+   release branch named `chore/release-<version>` (for example
+   `chore/release-1.2.0`). Releases always get their own separate `chore/`
+   branch - do not release directly from `main` or from a feature branch.
+3. On the `chore/release-<version>` branch: bump `version` in `pubspec.yaml`,
+   add the matching `CHANGELOG.md` entry, update `README.md` if the public API
+   changed, then publish (run `dart pub publish --dry-run` first, then
+   `dart pub publish`).
+4. Merge the `chore/release-<version>` branch back to `main` via a PR and delete
+   the branch.
+
+Keep the `pubspec.yaml` version, the `CHANGELOG.md` entry, and the published
+pub.dev version in lockstep. `pubspec.yaml` `repository:` must point at
+`https://github.com/0xharkirat/dart_autogui`.
+
 ## Current Reality
 
-As of 2026-03-27:
+As of 2026-07-09 (v1.2.0):
+
+- Keyboard now supports ~90 named `AutoGUIKey` values, PyAutoGUI-style key-name
+  strings, `isValidKey`, `keyboardKeys`, shift-aware typing, hotkey/hold, and a
+  screen-corner fail-safe.
+- The per-platform FFI bindings were unified into one `NativeBindings`
+  (`lib/src/ffi/bindings.dart`); the old `ffi/{macos,linux,windows}.dart` files
+  and the `_MacMouse`/`_LinuxMouse`/`_WindowsMouse` classes are gone (one
+  `_NativeMouse` remains). Keyboard classes stay split per platform.
+- Fail-safe/pause config lives in a shared `FailSafe` (platform.dart); `Mouse`
+  and `Keyboard` both honor it. `Keyboard.failSafeEnabled` etc. forward to it.
+- Parts of the file walkthrough below predate the FFI unification - verify
+  against code.
+
+Earlier baseline (2026-03-27):
 
 - `dart analyze` passes.
 - `dart test` passes.
