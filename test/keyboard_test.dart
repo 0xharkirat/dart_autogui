@@ -6,10 +6,16 @@ import 'mocks/mock_platform.dart';
 
 void main() {
   late MockPlatformKeyboard mockKeyboard;
+  late MockPlatformMouse mockMouse;
 
   setUp(() {
     mockKeyboard = MockPlatformKeyboard();
+    mockMouse = MockPlatformMouse()..setPosition(100, 100);
     platformKeyboardInstance = mockKeyboard;
+    platformMouseInstance = mockMouse;
+    Keyboard.failSafeEnabled = true;
+    Keyboard.pauseAfterAction = Duration.zero;
+    Keyboard.failSafePadding = 0;
   });
 
   group('Keyboard Tests', () {
@@ -24,20 +30,155 @@ void main() {
       expect(mockKeyboard.calls, ['keyDown(97)', 'keyUp(97)']);
     });
 
+    test('press applies shift for uppercase characters', () async {
+      await Keyboard.press('A');
+      expect(mockKeyboard.calls, [
+        'keyDown(1005)',
+        'keyDown(97)',
+        'keyUp(97)',
+        'keyUp(1005)',
+      ]);
+    });
+
+    test('press applies shift for shifted punctuation', () async {
+      // '!' -> shift + base key '1' (code unit 49 stands in for the keycode).
+      await Keyboard.press('!');
+      expect(mockKeyboard.calls, [
+        'keyDown(1005)',
+        'keyDown(49)',
+        'keyUp(49)',
+        'keyUp(1005)',
+      ]);
+    });
+
+    test('press repeats without holding the key for presses > 1', () async {
+      await Keyboard.press('a', presses: 3);
+      expect(mockKeyboard.calls, [
+        'keyDown(97)', 'keyUp(97)',
+        'keyDown(97)', 'keyUp(97)',
+        'keyDown(97)', 'keyUp(97)',
+      ]);
+    });
+
+    test('press with non-positive presses is a no-op', () async {
+      await Keyboard.press('a', presses: 0);
+      expect(mockKeyboard.calls, isEmpty);
+    });
+
     test('typeWrite calls keyDown/Up for each char', () async {
-      // Mock charToKeycode: 'A' -> 65
       await Keyboard.typeWrite('A');
-      expect(mockKeyboard.calls, ['keyDown(65)', 'keyUp(65)']);
+      expect(mockKeyboard.calls, [
+        'keyDown(1005)',
+        'keyDown(97)',
+        'keyUp(97)',
+        'keyUp(1005)',
+      ]);
     });
 
     test('typeWrite multiple chars', () async {
       await Keyboard.typeWrite('AB');
       expect(mockKeyboard.calls, [
-        'keyDown(65)',
-        'keyUp(65)',
-        'keyDown(66)',
-        'keyUp(66)',
+        'keyDown(1005)',
+        'keyDown(97)',
+        'keyUp(97)',
+        'keyUp(1005)',
+        'keyDown(1005)',
+        'keyDown(98)',
+        'keyUp(98)',
+        'keyUp(1005)',
       ]);
+    });
+
+    test('write supports mixed-case strings', () async {
+      await Keyboard.write('Ab');
+      expect(mockKeyboard.calls, [
+        'keyDown(1005)',
+        'keyDown(97)',
+        'keyUp(97)',
+        'keyUp(1005)',
+        'keyDown(98)',
+        'keyUp(98)',
+      ]);
+    });
+
+    test('hotkey presses keys down in order and releases in reverse', () async {
+      await Keyboard.hotkey([AutoGUIKey.control, 'c']);
+      expect(mockKeyboard.calls, [
+        'keyDown(1006)',
+        'keyDown(99)',
+        'keyUp(99)',
+        'keyUp(1006)',
+      ]);
+    });
+
+    test('hold keeps key pressed during callback and releases after', () async {
+      final seenInside = <String>[];
+      await Keyboard.hold(AutoGUIKey.shift, () async {
+        seenInside.addAll(mockKeyboard.calls);
+      });
+      expect(seenInside, ['keyDown(1005)']);
+      expect(mockKeyboard.calls, ['keyDown(1005)', 'keyUp(1005)']);
+    });
+
+    test('keyChord aliases hotkey', () async {
+      await Keyboard.keyChord([AutoGUIKey.alt, 'x']);
+      expect(mockKeyboard.calls, [
+        'keyDown(1007)',
+        'keyDown(120)',
+        'keyUp(120)',
+        'keyUp(1007)',
+      ]);
+    });
+
+    test('press throws when fail-safe is triggered', () async {
+      mockMouse.setPosition(0, 0);
+      expect(() => Keyboard.press('a'), throwsA(isA<FailSafeException>()));
+    });
+
+    test('fail-safe does not trigger off-primary-monitor coordinates', () async {
+      // A display left/above the primary reports negative coordinates; one
+      // right/below reports coordinates past the primary size. Neither is a
+      // corner point, so keyboard actions must not abort.
+      mockMouse.setPosition(-800, -100);
+      await Keyboard.press('a');
+      mockMouse.setPosition(3000, 1500);
+      await Keyboard.press('a');
+      expect(mockKeyboard.calls, [
+        'keyDown(97)', 'keyUp(97)',
+        'keyDown(97)', 'keyUp(97)',
+      ]);
+    });
+
+    test('fail-safe triggers at the bottom-right primary corner', () async {
+      // screenSize is 1920x1080 -> corner point (1919, 1079).
+      mockMouse.setPosition(1919, 1079);
+      expect(() => Keyboard.press('a'), throwsA(isA<FailSafeException>()));
+    });
+  });
+
+  group('ASCII key mapping helpers', () {
+    test('requiresShift detects uppercase and shifted punctuation', () {
+      expect(requiresShift('A'), isTrue);
+      expect(requiresShift('!'), isTrue);
+      expect(requiresShift(':'), isTrue);
+      expect(requiresShift('a'), isFalse);
+      expect(requiresShift('1'), isFalse);
+      expect(requiresShift(';'), isFalse);
+    });
+
+    test('baseChar folds to the unshifted physical key', () {
+      expect(baseChar('A'), 'a');
+      expect(baseChar('!'), '1');
+      expect(baseChar(':'), ';');
+      expect(baseChar('a'), 'a');
+      expect(baseChar('1'), '1');
+    });
+
+    test('controlCharKeysym maps newline/return/tab to X11 keysyms', () {
+      expect(controlCharKeysym('\n'), 0xFF0D);
+      expect(controlCharKeysym('\r'), 0xFF0D);
+      expect(controlCharKeysym('\t'), 0xFF09);
+      expect(controlCharKeysym('a'), isNull);
     });
   });
 }

@@ -22,8 +22,68 @@ abstract class PlatformMouse {
 abstract class PlatformKeyboard {
   void keyDown(int keycode);
   void keyUp(int keycode);
-  int? charToKeycode(String char);
+  KeyStroke? charToKeyStroke(String char);
   int? mapKey(AutoGUIKey key);
+}
+
+const Map<String, String> _shiftedBaseChars = {
+  '!': '1',
+  '@': '2',
+  '#': '3',
+  r'$': '4',
+  '%': '5',
+  '^': '6',
+  '&': '7',
+  '*': '8',
+  '(': '9',
+  ')': '0',
+  '_': '-',
+  '+': '=',
+  '{': '[',
+  '}': ']',
+  '|': '\\',
+  ':': ';',
+  '"': '\'',
+  '<': ',',
+  '>': '.',
+  '?': '/',
+  '~': '`',
+};
+
+/// Whether typing [char] on a US layout requires holding Shift.
+///
+/// Package-internal (not re-exported from `autogui.dart`); exposed without a
+/// leading underscore so the platform keyboards, the test mock, and unit tests
+/// all share the exact same logic instead of re-deriving it.
+bool requiresShift(String char) {
+  if (_shiftedBaseChars.containsKey(char)) return true;
+  final lower = char.toLowerCase();
+  return char != lower &&
+      lower.codeUnitAt(0) >= 97 &&
+      lower.codeUnitAt(0) <= 122;
+}
+
+/// Folds [char] to the physical key that produces it, dropping Shift.
+///
+/// e.g. `'A' -> 'a'`, `'!' -> '1'`, `':' -> ';'`. See [requiresShift].
+String baseChar(String char) {
+  if (_shiftedBaseChars.containsKey(char)) return _shiftedBaseChars[char]!;
+  return char.toLowerCase();
+}
+
+/// Maps the ASCII control characters that appear in typed text to their X11
+/// keysyms. Newline/carriage-return both resolve to Return so that
+/// `write("line1\nline2")` types correctly on Linux instead of feeding the raw
+/// code unit (10/13) to `keysymToKeycode`, which has no such keysym.
+int? controlCharKeysym(String char) {
+  switch (char) {
+    case '\n':
+    case '\r':
+      return 0xFF0D; // XK_Return
+    case '\t':
+      return 0xFF09; // XK_Tab
+  }
+  return null;
 }
 
 class _MacMouse implements PlatformMouse {
@@ -172,6 +232,7 @@ class _MacKeyboard implements PlatformKeyboard {
     'i': 34,
     'p': 35,
     '\n': 36,
+    '\r': 36,
     'l': 37,
     'j': 38,
     '\'': 39,
@@ -195,9 +256,15 @@ class _MacKeyboard implements PlatformKeyboard {
   void keyUp(int keycode) => _b.keyUp(keycode);
 
   @override
-  int? charToKeycode(String char) {
+  KeyStroke? charToKeyStroke(String char) {
     if (char.length != 1) return null;
-    return _charMap[char.toLowerCase()];
+    final base = baseChar(char);
+    final keycode = _charMap[base];
+    if (keycode == null) return null;
+    return KeyStroke(
+      keycode,
+      modifiers: requiresShift(char) ? const [AutoGUIKey.shift] : const [],
+    );
   }
 
   @override
@@ -236,12 +303,18 @@ class _LinuxKeyboard implements PlatformKeyboard {
   void keyUp(int keycode) => _b.keyUp(keycode);
 
   @override
-  int? charToKeycode(String char) {
-    // On Linux we can use XKeysymToKeycode if we had the keysym.
-    // ASCII chars map to keysyms usually (Latin-1).
+  KeyStroke? charToKeyStroke(String char) {
     if (char.length != 1) return null;
-    int keysym = char.codeUnitAt(0);
-    return _b.keysymToKeycode(keysym);
+    final base = baseChar(char);
+    // Control chars (\n, \r, \t) are not their own keysyms; map them explicitly
+    // before falling back to the Latin-1 code unit for printable characters.
+    final keysym = controlCharKeysym(base) ?? base.codeUnitAt(0);
+    final keycode = _b.keysymToKeycode(keysym);
+    if (keycode == null || keycode == 0) return null;
+    return KeyStroke(
+      keycode,
+      modifiers: requiresShift(char) ? const [AutoGUIKey.shift] : const [],
+    );
   }
 
   @override
@@ -280,17 +353,48 @@ class _WindowsKeyboard implements PlatformKeyboard {
   void keyUp(int keycode) => _b.keyUp(keycode);
 
   @override
-  int? charToKeycode(String char) {
-    // Windows Virtual Key codes.
-    // A-Z, 0-9 match ASCII for the most part (UPPERCASE).
+  KeyStroke? charToKeyStroke(String char) {
     if (char.length != 1) return null;
-    int c = char.toUpperCase().codeUnitAt(0);
-    // 0-9 and A-Z are same as ASCII
-    if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90)) {
-      return c;
+    final base = baseChar(char);
+    final upper = base.toUpperCase();
+    final code = upper.codeUnitAt(0);
+
+    if (base == ' ') {
+      return const KeyStroke(0x20);
     }
-    if (char == ' ') return 0x20; // VK_SPACE
-    return null;
+    if (base == '\n' || base == '\r') {
+      return const KeyStroke(0x0D);
+    }
+    if (base == '\t') {
+      return const KeyStroke(0x09);
+    }
+
+    if ((code >= 48 && code <= 57) || (code >= 65 && code <= 90)) {
+      return KeyStroke(
+        code,
+        modifiers: requiresShift(char) ? const [AutoGUIKey.shift] : const [],
+      );
+    }
+
+    const windowsPunctuation = {
+      ';': 0xBA,
+      '=': 0xBB,
+      ',': 0xBC,
+      '-': 0xBD,
+      '.': 0xBE,
+      '/': 0xBF,
+      '`': 0xC0,
+      '[': 0xDB,
+      '\\': 0xDC,
+      ']': 0xDD,
+      '\'': 0xDE,
+    };
+    final punct = windowsPunctuation[base];
+    if (punct == null) return null;
+    return KeyStroke(
+      punct,
+      modifiers: requiresShift(char) ? const [AutoGUIKey.shift] : const [],
+    );
   }
 
   @override
