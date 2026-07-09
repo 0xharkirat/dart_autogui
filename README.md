@@ -6,9 +6,11 @@
 
 ## Features
 
-- Move and control the mouse
-- Perform mouse clicks and drags
-- Send basic keyboard input
+- Move and control the mouse, with optional eased/tweened motion
+- Mouse clicks, drags, and scrolling
+- Keyboard typing, key presses, hotkeys/chords, and key-hold
+- PyAutoGUI-style named keys (`press('f1')`, `hotkey(['ctrl', 'c'])`) with shift-aware typing
+- Screen-corner fail-safe to abort a runaway script
 - Works on Windows, macOS, and Linux
 
 ## Installation
@@ -16,7 +18,7 @@
 1. Add the dependency:
 ```yaml
 dependencies:
-  autogui: ^1.0.0
+  autogui: ^1.1.0
 ```
 
 2. **Setup Native Library**:
@@ -41,7 +43,7 @@ Use the `Mouse` class to control the cursor.
 #### Movement
 - **`Mouse.moveTo(x, y, {duration, easing})`**: Moves mouse to absolute coordinates.
   - Optional `duration` for smooth movement.
-  - Optional `easing` function (e.g., `easeInQuad`, `easeOutElastic`).
+  - Optional `easing` function (e.g., `easeInQuad`, `easeInOutQuad`).
 - **`Mouse.move(dx, dy, {duration, easing})`**: Moves mouse relative to current position.
 - **`Mouse.dragTo(x, y, {button})`**: Drags mouse to target while holding a button.
 - **`Mouse.drag(dx, dy, {button})`**: Drags mouse relatively.
@@ -56,26 +58,69 @@ Use the `Mouse` class to control the cursor.
 - **`Mouse.hscroll(clicks)`**: Scrolls horizontally (positive = right, negative = left).
 
 ### Keyboard Control
-Use the `Keyboard` class to simulate key presses.
+Use the `Keyboard` class to simulate key presses. A key can be an `AutoGUIKey`, a
+PyAutoGUI-style name string, a single character, or a raw int keycode:
+`Keyboard.press(AutoGUIKey.enter)`, `Keyboard.press('enter')`, `Keyboard.press('a')`,
+`Keyboard.press(0x0D)`.
 
-- **`Keyboard.typeWrite(message, {intervalSec})`**: Types a string of characters.
-  - `intervalSec`: Delay between each key press.
-- **`Keyboard.press(key)`**: Presses and releases a single key.
-  - usage: `Keyboard.press(AutoGUIKey.enter)`, `Keyboard.press('a')`, or `Keyboard.press(0x0D)` for a raw platform keycode.
-- **`Keyboard.keyDown(key)`**: Holds a key down.
-- **`Keyboard.keyUp(key)`**: Releases a key.
+- **`Keyboard.write(message, {interval})`** / **`Keyboard.typeWrite(message, {intervalSec})`**: Types a string. Uppercase and shifted punctuation are handled (US layout).
+- **`Keyboard.press(key, {presses, interval})`**: Presses and releases a key, optionally repeated.
+- **`Keyboard.hotkey([...keys])`** / **`Keyboard.keyChord([...keys])`**: Presses keys together, releases in reverse, e.g. `hotkey(['ctrl', 'c'])`.
+- **`Keyboard.hold(key, action)`**: Holds a key down while `action` runs, then releases it.
+- **`Keyboard.keyDown(key)`** / **`Keyboard.keyUp(key)`**: Hold or release a key.
+- **`Keyboard.isValidKey(key)`** / **`Keyboard.keyboardKeys`**: Check or list the key names supported on the current platform.
 
 #### Supported Keys (`AutoGUIKey`)
-- `enter`, `space`, `tab`, `escape`, `backspace`
-- `shift`, `control`, `alt`, `cmd` (Meta/Super/Win)
+Around 90 named keys, mapped per platform:
+- Modifiers: `shift`/`control`/`alt`/`cmd` plus `left`/`right` variants, `capsLock`, `numLock`, `fn`
+- Function keys `f1`-`f24`, arrows, `home`/`end`/`pageUp`/`pageDown`, `insert`/`delete`
+- Numpad `num0`-`num9` and operators
+- Name aliases: `esc`, `pgup`, `command`, `option`, and more
 
-> **Note**: Character mapping (e.g. `typeWrite`) is currently basic and relies on standard US layout assumptions for some platforms.
+Keys with no equivalent on a platform (for example `f21`-`f24` and `insert` on macOS) resolve to null; use `Keyboard.isValidKey` to check.
+
+### Fail-safe
+
+By default, keyboard actions abort with a `FailSafeException` if the pointer is slammed
+into a screen corner - a manual kill switch for a runaway script. Disable with
+`Keyboard.failSafeEnabled = false`.
+
+## Examples
+
+```dart
+import 'dart:io';
+import 'package:autogui/autogui.dart';
+
+Future<void> main() async {
+  await Future.delayed(const Duration(seconds: 3)); // focus your target window
+
+  // Fill a form: type, Tab between fields, submit.
+  await Keyboard.write('Ada Lovelace');
+  await Keyboard.press('tab');
+  await Keyboard.write('ada@example.com');
+  await Keyboard.press('enter');
+
+  // Copy from one spot and paste to another (platform-correct modifier).
+  final mod = Platform.isMacOS ? 'command' : 'ctrl';
+  Mouse.click(x: 400, y: 300);
+  await Keyboard.hotkey([mod, 'a']);
+  await Keyboard.hotkey([mod, 'c']);
+  Mouse.click(x: 900, y: 300);
+  await Keyboard.hotkey([mod, 'v']);
+
+  // Smooth, eased pointer move.
+  await Mouse.moveTo(1200, 800,
+      duration: const Duration(seconds: 1), easing: easeInOutQuad);
+}
+```
+
+See [`example/`](example/) for more.
 
 ## Current Limitations
 
-- Mouse automation is the most complete part of the package.
-- Keyboard automation is available on macOS, Linux, and Windows, but text entry is still basic and layout-sensitive.
-- There is no screenshot or image-matching API in the current package.
+- Text entry assumes a US keyboard layout; non-ASCII input is not yet supported.
+- Media and volume keys are not yet available on macOS.
+- There is no screenshot or image-matching API yet.
 
 ## Requirements
 - **macOS**: Xcode Command Line Tools.

@@ -1,4 +1,4 @@
-## Unreleased
+## 1.1.0
 
 - Expand `AutoGUIKey` to ~90 named keys (function keys F1-F24, arrows, navigation, editing, numpad, and left/right modifier variants) mapped per platform.
 - Accept PyAutoGUI-style key-name strings in `press`, `keyDown`, `keyUp`, `hotkey`, and `hold` (e.g. `press('f1')`, `hotkey(['ctrl', 'c'])`), with aliases such as `esc`, `pgup`, and `command`.

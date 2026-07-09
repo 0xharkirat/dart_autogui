@@ -1,7 +1,7 @@
 name: autogui
 description: A cross-platform GUI automation library for Dart. Control mouse and keyboard programmatically on macOS, Windows, and Linux.
-version: 1.0.0
-repository: https://github.com/my_org/autogui
+version: 1.1.0
+repository: https://github.com/0xharkirat/dart_autogui
 
 environment:
   sdk: ^3.8.1
