@@ -31,8 +31,16 @@ typedef _DIsTrusted = int Function();
 typedef _CKey = ffi.Void Function(ffi.Int32);
 typedef _DKey = void Function(int);
 
-class MacOSBindings {
-  late final ffi.DynamicLibrary _lib;
+typedef _CKeySym = ffi.Int32 Function(ffi.Int32);
+typedef _DKeySym = int Function(int);
+
+/// FFI bindings to the native `dag_*` shared library.
+///
+/// The C ABI is unified across platforms, so the only per-platform difference
+/// is which library file to open (handled by [load]) and the Linux-only
+/// `dag_keysym_to_keycode` symbol (looked up optionally).
+class NativeBindings {
+  final ffi.DynamicLibrary _lib;
   late final _DGetPos _getPos;
   late final _DMove _move;
   late final _DDownUp _mouseDown;
@@ -44,8 +52,9 @@ class MacOSBindings {
   late final _DIsTrusted _isTrusted;
   late final _DKey _keyDown;
   late final _DKey _keyUp;
+  late final _DKeySym? _keysymToKeycode;
 
-  MacOSBindings._(this._lib) {
+  NativeBindings._(this._lib) {
     _getPos = _lib.lookupFunction<_CGetPos, _DGetPos>('dag_get_mouse_position');
     _move = _lib.lookupFunction<_CMove, _DMove>('dag_move_mouse');
     _mouseDown = _lib.lookupFunction<_CDownUp, _DDownUp>('dag_mouse_down');
@@ -59,28 +68,56 @@ class MacOSBindings {
     );
     _keyDown = _lib.lookupFunction<_CKey, _DKey>('dag_key_down');
     _keyUp = _lib.lookupFunction<_CKey, _DKey>('dag_key_up');
-  }
-
-  static MacOSBindings load() {
-    if (!Platform.isMacOS) {
-      throw UnsupportedError('MacOSBindings can only be used on macOS');
-    }
-    // Try development path first, then fallback to library name (user must have it in search path/local)
+    // Linux-only: absent from the macOS/Windows libraries.
     try {
-      return MacOSBindings._(
-        ffi.DynamicLibrary.open('src/native/macos/libdart_autogui.dylib'),
+      _keysymToKeycode = _lib.lookupFunction<_CKeySym, _DKeySym>(
+        'dag_keysym_to_keycode',
       );
     } catch (_) {
+      _keysymToKeycode = null;
+    }
+  }
+
+  static NativeBindings load() {
+    final (primary, fallback, name) = _libraryPaths();
+    try {
+      return NativeBindings._(ffi.DynamicLibrary.open(primary));
+    } catch (_) {
       try {
-        return MacOSBindings._(
-          ffi.DynamicLibrary.open('libdart_autogui.dylib'),
-        );
-      } catch (e) {
+        return NativeBindings._(ffi.DynamicLibrary.open(fallback));
+      } catch (_) {
         throw UnsupportedError(
-          'Could not load libdart_autogui.dylib. Run dart_autogui:setup or ensure library is in path.',
+          'Could not load $name. Run dart_autogui:setup or ensure the '
+          'library is on the load path.',
         );
       }
     }
+  }
+
+  /// (dev-tree path, bare name for the system load path, display name).
+  static (String, String, String) _libraryPaths() {
+    if (Platform.isMacOS) {
+      return (
+        'src/native/macos/libdart_autogui.dylib',
+        'libdart_autogui.dylib',
+        'libdart_autogui.dylib',
+      );
+    }
+    if (Platform.isLinux) {
+      return (
+        'src/native/linux/libdart_autogui.so',
+        'libdart_autogui.so',
+        'libdart_autogui.so',
+      );
+    }
+    if (Platform.isWindows) {
+      return (
+        'src/native/windows/dart_autogui.dll',
+        'dart_autogui.dll',
+        'dart_autogui.dll',
+      );
+    }
+    throw UnsupportedError('Platform not supported');
   }
 
   Point<double> mousePosition() {
@@ -116,4 +153,7 @@ class MacOSBindings {
   bool isAccessibilityTrusted() => _isTrusted() == 1;
   void keyDown(int keycode) => _keyDown(keycode);
   void keyUp(int keycode) => _keyUp(keycode);
+
+  /// Resolves an X11 keysym to a keycode on Linux; null elsewhere.
+  int? keysymToKeycode(int keysym) => _keysymToKeycode?.call(keysym);
 }
