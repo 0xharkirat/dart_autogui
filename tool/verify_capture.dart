@@ -151,40 +151,59 @@ void main() {
       '(expect true)',
     );
 
-    // Milestone C: crop a region off the screen, save it, then find it again.
-    // The crop must be visually distinctive: a flat patch legitimately matches
-    // the first flat area in scan order, so it would prove nothing about the
-    // coordinate mapping. Hunt for the most colour-varied block instead.
+    // Milestone C. The crop has to be BOTH distinctive and static.
+    //  - flat  => it matches the first similar patch in scan order, proving
+    //             nothing about the coordinate mapping;
+    //  - moving => any later mismatch is the screen's fault, not the code's.
+    // A second full capture is the control: a region whose bytes are identical
+    // in both is static, so a remaining difference can only be our doing.
+    stdout.writeln('\n-- locate round trip --');
+    final fullB = Screen.screenshot();
+
     const rw = 80, rh = 60;
+
+    /// Distinct sampled colours, and whether every sample is unchanged in fullB.
+    (int, bool) score(int lx, int ly) {
+      final seen = <int>{};
+      for (var sy = 0; sy < rh; sy += 6) {
+        for (var sx = 0; sx < rw; sx += 8) {
+          final ax = (lx + sx) * scale, ay = (ly + sy) * scale;
+          final a = full.pixelAt(ax, ay);
+          if (a != fullB.pixelAt(ax, ay)) return (0, false);
+          seen.add((a.$1 << 16) | (a.$2 << 8) | a.$3);
+        }
+      }
+      return (seen.length, true);
+    }
+
     var best = const Point(0, 0);
     var bestColours = -1;
+    var foundStatic = false;
     for (var ly = 0; ly + rh < logical.y; ly += 60) {
       for (var lx = 0; lx + rw < logical.x; lx += 80) {
-        final seen = <int>{};
-        for (var sy = 0; sy < rh; sy += 6) {
-          for (var sx = 0; sx < rw; sx += 8) {
-            final (r, g, b) = full.pixelAt(
-              (lx + sx) * scale,
-              (ly + sy) * scale,
-            );
-            seen.add((r << 16) | (g << 8) | b);
-          }
-        }
-        if (seen.length > bestColours) {
-          bestColours = seen.length;
+        final (colours, stable) = score(lx, ly);
+        if (!stable) continue;
+        foundStatic = true;
+        if (colours > bestColours) {
+          bestColours = colours;
           best = Point(lx, ly);
         }
       }
     }
 
-    stdout.writeln('\n-- locate round trip --');
+    if (!foundStatic) {
+      stdout.writeln(
+        'WARN: no region held still across two captures; everything below is '
+        'inconclusive. Stop animations and re-run.',
+      );
+    }
     stdout.writeln(
-      'chose region (${best.x},${best.y}) ${rw}x$rh '
+      'chose static region (${best.x},${best.y}) ${rw}x$rh '
       'with $bestColours distinct sampled colours',
     );
     if (bestColours < 8) {
       stdout.writeln(
-        'WARN: screen is very uniform; the round trip below is weak. '
+        'WARN: that region is nearly uniform; the round trip below is weak. '
         'Open something colourful and re-run.',
       );
     }
@@ -220,23 +239,42 @@ void main() {
     }
 
     // (2) Is a region capture pixel-identical to that block of a full capture?
-    // If SCK resamples a scaled sourceRect, a needle cropped this way could
-    // never match, and locateOnScreen would be unreliable by construction.
+    // If ScreenCaptureKit resamples a scaled sourceRect, a needle cropped this
+    // way could never match and locateOnScreen would be broken by construction.
+    // The block is confirmed unchanged across two full captures first, so the
+    // screen cannot be blamed for a difference.
+    final blockB = cropPhysical(fullB, px, py, pw, ph);
+    final blockStatic = _sameBytes(needle.rgba, blockB.rgba);
+    stdout.writeln(
+      '${blockStatic ? "OK  " : "SKIP"} block is identical across two full '
+      'captures (static control)',
+    );
+
     final regionShot = Screen.screenshot(region: want);
     final identical =
         regionShot.width == pw &&
         regionShot.height == ph &&
         _sameBytes(regionShot.rgba, needle.rgba);
     stdout.writeln(
-      '${identical ? "OK  " : "DIFF"} region capture == same block of full '
-      'capture (${regionShot.width}x${regionShot.height})',
+      '${identical ? "OK  " : (blockStatic ? "FAIL" : "DIFF")} region capture '
+      '== same block of full capture (${regionShot.width}x${regionShot.height})',
     );
-    if (!identical) {
+    if (!identical && blockStatic) {
       stdout.writeln(
-        '  DIFF here means either the screen changed, or region captures are '
-        'resampled and cannot be used as needles. Compare against a static '
-        'area to tell them apart.',
+        '  FAIL over a provably static block: region captures are resampled, '
+        'so they cannot be used as needles. locateOnScreen needs a needle '
+        'cropped from a full screenshot.',
       );
+      var differing = 0;
+      for (var i = 0; i < needle.rgba.length; i++) {
+        if (needle.rgba[i] != regionShot.rgba[i]) differing++;
+      }
+      stdout.writeln(
+        '  $differing of ${needle.rgba.length} bytes differ; '
+        'full=${needle.pixelAt(0, 0)} region=${regionShot.pixelAt(0, 0)}',
+      );
+    } else if (!identical) {
+      stdout.writeln('  block moved between captures; inconclusive.');
     }
 
     // (3) Live. Takes a fresh screenshot, so a moving screen can defeat it.
