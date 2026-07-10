@@ -3,6 +3,7 @@
 #include <X11/extensions/XTest.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 // Export macros
 #if defined(_WIN32)
@@ -157,4 +158,66 @@ EXPORT int dag_keysym_to_keycode(int keysym) {
     KeyCode code = XKeysymToKeycode(d, (KeySym)keysym);
     XCloseDisplay(d);
     return (int)code;
+}
+
+EXPORT int dag_is_screen_capture_trusted() {
+    // X11 has no per-app screen capture permission.
+    return 1;
+}
+
+static int _mask_shift(unsigned long mask) {
+    int shift = 0;
+    if (!mask) return 0;
+    while (!(mask & 1UL)) { mask >>= 1; shift++; }
+    return shift;
+}
+
+// ponytail: XGetPixel per pixel, one call per pixel. Fine for occasional
+// captures; switch to XShmGetImage with direct buffer access if capture rate
+// ever matters.
+EXPORT unsigned char* dag_capture_screen(int x, int y, int w, int h, int* out_w, int* out_h) {
+    if (out_w) *out_w = 0;
+    if (out_h) *out_h = 0;
+
+    Display* d = XOpenDisplay(NULL);
+    if (!d) return NULL;
+    Window root = DefaultRootWindow(d);
+
+    if (w <= 0 || h <= 0) {
+        int s = DefaultScreen(d);
+        x = 0; y = 0;
+        w = DisplayWidth(d, s);
+        h = DisplayHeight(d, s);
+    }
+
+    XImage* img = XGetImage(d, root, x, y, w, h, AllPlanes, ZPixmap);
+    if (!img) { XCloseDisplay(d); return NULL; }
+
+    unsigned char* buf = (unsigned char*)malloc((size_t)w * (size_t)h * 4);
+    if (!buf) { XDestroyImage(img); XCloseDisplay(d); return NULL; }
+
+    int rs = _mask_shift(img->red_mask);
+    int gs = _mask_shift(img->green_mask);
+    int bs = _mask_shift(img->blue_mask);
+
+    for (int py = 0; py < h; py++) {
+        for (int px = 0; px < w; px++) {
+            unsigned long p = XGetPixel(img, px, py);
+            size_t i = ((size_t)py * (size_t)w + (size_t)px) * 4;
+            buf[i + 0] = (unsigned char)((p & img->red_mask) >> rs);
+            buf[i + 1] = (unsigned char)((p & img->green_mask) >> gs);
+            buf[i + 2] = (unsigned char)((p & img->blue_mask) >> bs);
+            buf[i + 3] = 255;
+        }
+    }
+
+    XDestroyImage(img);
+    XCloseDisplay(d);
+    if (out_w) *out_w = w;
+    if (out_h) *out_h = h;
+    return buf;
+}
+
+EXPORT void dag_free_image(unsigned char* buf) {
+    if (buf) free(buf);
 }

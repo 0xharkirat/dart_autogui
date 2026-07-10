@@ -23,10 +23,23 @@ void dag_hscroll(int delta_lines);
 
 // Permissions
 int dag_is_accessibility_trusted();
+// Screen Recording permission (macOS). Other platforms always return 1.
+int dag_is_screen_capture_trusted();
 
 // Keyboard
 void dag_key_down(int keycode);
 void dag_key_up(int keycode);
+
+// Screen capture.
+// (x, y, w, h) are in the same coordinate space as dag_get_screen_size and
+// dag_get_mouse_position. w <= 0 || h <= 0 captures the full primary display.
+// Returns a malloc'd RGBA8888 buffer of out_w*out_h*4 bytes (row-major, no row
+// padding) and writes the real pixel dimensions to out_w/out_h - these can
+// exceed the requested size on HiDPI displays. Returns NULL on failure.
+// The caller must release the buffer with dag_free_image.
+unsigned char *dag_capture_screen(int x, int y, int w, int h, int *out_w,
+                                  int *out_h);
+void dag_free_image(unsigned char *buf);
 
 #ifdef __cplusplus
 }

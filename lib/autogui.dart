@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'dart:math';
+import 'package:image/image.dart' as img;
 import 'src/platform.dart';
 export 'src/keyboard.dart';
-export 'src/platform.dart' show MouseButton, FailSafe, FailSafeException;
+export 'src/platform.dart'
+    show MouseButton, FailSafe, FailSafeException, Capture;
 
 /// Easing function: t in [0,1] -> progress in [0,1]
 typedef Easing = double Function(double t);
@@ -51,6 +54,37 @@ class Screen {
   static bool onScreen(num x, num y) {
     final s = size();
     return x >= 0 && y >= 0 && x < s.x && y < s.y;
+  }
+
+  /// Whether the OS has granted screen-capture permission.
+  ///
+  /// On macOS this is the Screen Recording permission; without it
+  /// [screenshot] fails. Always true on Linux and Windows.
+  static bool get isScreenCaptureTrusted =>
+      platformScreen.isScreenCaptureTrusted();
+
+  /// Captures the primary display, or just [region] of it.
+  ///
+  /// [region] is in logical coordinates - the same space as [Mouse.position]
+  /// and [size]. The returned [Capture] holds *physical* pixels, so on a HiDPI
+  /// display its dimensions are the logical size times the backing scale
+  /// factor. When [filename] is given, the capture is also written there as a
+  /// PNG.
+  ///
+  /// Throws [StateError] if the capture fails - most often missing macOS
+  /// Screen Recording permission, or macOS older than 14.
+  static Capture screenshot({Rectangle<int>? region, String? filename}) {
+    final capture = platformScreen.capture(region);
+    if (filename != null) {
+      final image = img.Image.fromBytes(
+        width: capture.width,
+        height: capture.height,
+        bytes: capture.rgba.buffer,
+        numChannels: 4,
+      );
+      File(filename).writeAsBytesSync(img.encodePng(image));
+    }
+    return capture;
   }
 }
 

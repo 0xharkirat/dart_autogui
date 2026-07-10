@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 import 'ffi/bindings.dart';
 import 'keyboard.dart';
 
@@ -22,6 +23,35 @@ abstract class PlatformKeyboard {
   void keyUp(int keycode);
   KeyStroke? charToKeyStroke(String char);
   int? mapKey(AutoGUIKey key);
+}
+
+/// A raw screen capture: RGBA8888 bytes plus their physical pixel dimensions.
+class Capture {
+  const Capture(this.rgba, this.width, this.height);
+
+  /// `width * height * 4` bytes, row-major, no row padding.
+  final Uint8List rgba;
+
+  /// Physical pixel dimensions. On a HiDPI display these are the requested
+  /// logical size multiplied by the display's backing scale factor, so they can
+  /// exceed `Screen.size()`.
+  final int width;
+  final int height;
+
+  /// The `(r, g, b)` of the pixel at physical coordinates ([x], [y]).
+  (int, int, int) pixelAt(int x, int y) {
+    if (x < 0 || y < 0 || x >= width || y >= height) {
+      throw RangeError('($x, $y) is outside the ${width}x$height capture');
+    }
+    final i = (y * width + x) * 4;
+    return (rgba[i], rgba[i + 1], rgba[i + 2]);
+  }
+}
+
+abstract class PlatformScreen {
+  /// Captures [region] (logical coordinates) or the whole primary display.
+  Capture capture(Rectangle<int>? region);
+  bool isScreenCaptureTrusted();
 }
 
 /// Thrown when an automation action is aborted because the pointer is parked in
@@ -170,6 +200,26 @@ class _NativeMouse implements PlatformMouse {
 
   @override
   bool isAccessibilityTrusted() => _b.isAccessibilityTrusted();
+}
+
+class _NativeScreen implements PlatformScreen {
+  _NativeScreen(this._b);
+
+  final NativeBindings _b;
+
+  @override
+  Capture capture(Rectangle<int>? region) {
+    final (bytes, w, h) = _b.captureScreen(
+      region?.left ?? 0,
+      region?.top ?? 0,
+      region?.width ?? 0,
+      region?.height ?? 0,
+    );
+    return Capture(bytes, w, h);
+  }
+
+  @override
+  bool isScreenCaptureTrusted() => _b.isScreenCaptureTrusted();
 }
 
 // --- Keyboard Implementations ---
@@ -586,14 +636,19 @@ class _WindowsKeyboard implements PlatformKeyboard {
 
 PlatformMouse? _platformMouse;
 PlatformKeyboard? _platformKeyboard;
+PlatformScreen? _platformScreen;
 
 /// Mockable instance for testing
 set platformMouseInstance(PlatformMouse? mock) => _platformMouse = mock;
 set platformKeyboardInstance(PlatformKeyboard? mock) =>
     _platformKeyboard = mock;
+set platformScreenInstance(PlatformScreen? mock) => _platformScreen = mock;
 
 PlatformMouse get platformMouse =>
     _platformMouse ??= _NativeMouse(NativeBindings.load());
+
+PlatformScreen get platformScreen =>
+    _platformScreen ??= _NativeScreen(NativeBindings.load());
 
 PlatformKeyboard get platformKeyboard {
   if (_platformKeyboard != null) return _platformKeyboard!;

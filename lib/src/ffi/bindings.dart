@@ -1,6 +1,7 @@
 import 'dart:ffi' as ffi;
 import 'dart:io' show Platform;
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 
 typedef _CGetPos =
@@ -34,6 +35,28 @@ typedef _DKey = void Function(int);
 typedef _CKeySym = ffi.Int32 Function(ffi.Int32);
 typedef _DKeySym = int Function(int);
 
+typedef _CCapture =
+    ffi.Pointer<ffi.Uint8> Function(
+      ffi.Int32,
+      ffi.Int32,
+      ffi.Int32,
+      ffi.Int32,
+      ffi.Pointer<ffi.Int32>,
+      ffi.Pointer<ffi.Int32>,
+    );
+typedef _DCapture =
+    ffi.Pointer<ffi.Uint8> Function(
+      int,
+      int,
+      int,
+      int,
+      ffi.Pointer<ffi.Int32>,
+      ffi.Pointer<ffi.Int32>,
+    );
+
+typedef _CFreeImage = ffi.Void Function(ffi.Pointer<ffi.Uint8>);
+typedef _DFreeImage = void Function(ffi.Pointer<ffi.Uint8>);
+
 /// FFI bindings to the native `dag_*` shared library.
 ///
 /// The C ABI is unified across platforms, so the only per-platform difference
@@ -53,6 +76,9 @@ class NativeBindings {
   late final _DKey _keyDown;
   late final _DKey _keyUp;
   late final _DKeySym? _keysymToKeycode;
+  late final _DIsTrusted _isScreenCaptureTrusted;
+  late final _DCapture _capture;
+  late final _DFreeImage _freeImage;
 
   NativeBindings._(this._lib) {
     _getPos = _lib.lookupFunction<_CGetPos, _DGetPos>('dag_get_mouse_position');
@@ -68,6 +94,13 @@ class NativeBindings {
     );
     _keyDown = _lib.lookupFunction<_CKey, _DKey>('dag_key_down');
     _keyUp = _lib.lookupFunction<_CKey, _DKey>('dag_key_up');
+    _isScreenCaptureTrusted = _lib.lookupFunction<_CIsTrusted, _DIsTrusted>(
+      'dag_is_screen_capture_trusted',
+    );
+    _capture = _lib.lookupFunction<_CCapture, _DCapture>('dag_capture_screen');
+    _freeImage = _lib.lookupFunction<_CFreeImage, _DFreeImage>(
+      'dag_free_image',
+    );
     // Linux-only: absent from the macOS/Windows libraries.
     try {
       _keysymToKeycode = _lib.lookupFunction<_CKeySym, _DKeySym>(
@@ -151,8 +184,38 @@ class NativeBindings {
   }
 
   bool isAccessibilityTrusted() => _isTrusted() == 1;
+  bool isScreenCaptureTrusted() => _isScreenCaptureTrusted() == 1;
   void keyDown(int keycode) => _keyDown(keycode);
   void keyUp(int keycode) => _keyUp(keycode);
+
+  /// Captures ([x], [y], [w], [h]) in logical screen coordinates - the same
+  /// space as [mousePosition] and [screenSize]. A non-positive [w] or [h]
+  /// captures the whole primary display.
+  ///
+  /// Returns the RGBA8888 bytes and the *physical* pixel dimensions, which
+  /// exceed the requested size on HiDPI displays.
+  (Uint8List, int, int) captureScreen(int x, int y, int w, int h) {
+    final pw = calloc<ffi.Int32>(), ph = calloc<ffi.Int32>();
+    ffi.Pointer<ffi.Uint8> buf = ffi.nullptr;
+    try {
+      buf = _capture(x, y, w, h, pw, ph);
+      if (buf == ffi.nullptr) {
+        throw StateError(
+          'Screen capture failed. On macOS this usually means Screen Recording '
+          'permission has not been granted to this program, or the system is '
+          'older than macOS 14.',
+        );
+      }
+      final width = pw.value, height = ph.value;
+      // Copy out so the native pointer never escapes this method.
+      final bytes = Uint8List.fromList(buf.asTypedList(width * height * 4));
+      return (bytes, width, height);
+    } finally {
+      if (buf != ffi.nullptr) _freeImage(buf);
+      calloc.free(pw);
+      calloc.free(ph);
+    }
+  }
 
   /// Resolves an X11 keysym to a keycode on Linux; null elsewhere.
   int? keysymToKeycode(int keysym) => _keysymToKeycode?.call(keysym);

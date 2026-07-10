@@ -66,11 +66,21 @@ void dag_free_image(unsigned char* buf);
 
 Per platform (each normalizes to RGBA before returning, so Dart stays uniform):
 
-- **macOS** (`autogui.mm`): `CGDisplayCreateImage` (or `CGWindowListCreateImage`)
-  for the region → `CGBitmapContext` → copy to RGBA. Needs **Screen Recording**
-  permission (TCC), like accessibility - add `dag_is_screen_capture_trusted()` and
-  document the prompt. *Upgrade path*: ScreenCaptureKit when Apple drops the CG
-  APIs (heavier, async - not now).
+- **macOS** (`autogui.mm`): **ScreenCaptureKit**, not the CG APIs.
+  `CGDisplayCreateImage` and `CGWindowListCreateImage` are annotated
+  `SCREEN_CAPTURE_OBSOLETE(..., 15.0)` in the macOS 15+ SDK - they are
+  *unavailable*, a hard compile error, not a suppressible deprecation warning
+  (verified against SDK 26.1). The supported path is
+  `SCShareableContent` → `SCContentFilter` → `SCStreamConfiguration` →
+  `SCScreenshotManager.captureImageWithFilter:configuration:completionHandler:`,
+  wrapped in a `dispatch_semaphore` (with a timeout) to keep the C ABI
+  synchronous. Scale factor comes from `SCContentFilter.pointPixelScale`.
+  `SCScreenshotManager` is **macOS 14+**: capture is `@available`-gated and
+  returns NULL on older systems, where mouse/keyboard keep working.
+  Needs **Screen Recording** permission (TCC) - `dag_is_screen_capture_trusted()`
+  wraps `CGPreflightScreenCaptureAccess`. Build: link `ScreenCaptureKit`,
+  compile the `.mm` with `-fobjc-arc`, and set a `CMAKE_OSX_DEPLOYMENT_TARGET`
+  (13.0) so the shipped dylib is portable.
 - **Windows** (`autogui.cpp`): `BitBlt` screen DC → memory DC, `GetDIBits` for
   BGRA, swap to RGBA. No special permission.
 - **Linux** (`autogui.c`): `XGetImage` on the root window → convert to RGBA. No
@@ -147,20 +157,28 @@ fully unit-testable against synthetic `Capture` buffers (no real screen needed).
 
 ## 7. Risks & open questions
 
-1. **Retina / DPI scaling (primary risk).** On HiDPI, native capture returns
-   *physical* pixels (e.g. 3024×1964) while `dag_get_screen_size` and mouse
-   coords are *logical* points (e.g. 1512×982). `pixel(x,y)` must use the same
-   space as the mouse or every coordinate is off by the scale factor. Decide in
-   Milestone A: capture returns real pixels **plus a scale factor**, and `pixel`
-   / `region` map logical→physical internally so callers stay in one space.
-   Verify against `Screen.size()` on a Retina Mac before building B/C.
-2. **macOS Screen Recording permission** - first capture returns black/empty
-   until granted; may need an app restart. Mirror the accessibility-trust UX.
-3. **Native buffer ownership** - the FFI wrapper must copy then `dag_free_image`
-   in a `finally`; a smoke test should capture in a loop and watch RSS.
-4. **`package:image` on large buffers** - decode/encode is fine; keep the
+1. **Retina / DPI scaling (primary risk, still open).** On HiDPI, native capture
+   returns *physical* pixels while `dag_get_screen_size` and mouse coords are
+   *logical* points (dev machine reports `Screen.size() = 1512×982`, so a full
+   capture should come back 3024×1964). `pixel(x,y)` must use the same space as
+   the mouse or every coordinate is off by the scale factor. `Capture` currently
+   exposes physical `width`/`height`; **Milestone B must map logical→physical**
+   so callers stay in one space. Not yet verified empirically - blocked on (2).
+2. **macOS Screen Recording permission (blocks verification).** Confirmed
+   `Screen.isScreenCaptureTrusted` correctly reports `false` and `screenshot()`
+   throws a clear `StateError` when ungranted. Actual pixel capture is therefore
+   **unverified**: grant Screen Recording to the terminal/host in
+   System Settings → Privacy & Security → Screen Recording, then re-run the
+   smoke test. Consider adding `dag_request_screen_capture_access()`
+   (`CGRequestScreenCaptureAccess`) so the OS prompt can be triggered from Dart.
+3. **Linux/Windows capture is unverified** - written and compile-reviewed, but
+   built and smoke-tested on macOS only. Needs a real run on each OS.
+4. **Native buffer ownership** - the FFI wrapper copies then calls
+   `dag_free_image` in a `finally` (done); a smoke test should still capture in
+   a loop and watch RSS.
+5. **`package:image` on large buffers** - decode/encode is fine; keep the
    *matcher* on raw bytes (not `img.getPixel` per pixel, which is slow).
-5. **Multi-monitor** - v1 captures the primary display only, consistent with
+6. **Multi-monitor** - v1 captures the primary display only, consistent with
    today's primary-only `Screen.size()`. Virtual-desktop capture is Milestone D.
 
 ## 8. Definition of done (per milestone)

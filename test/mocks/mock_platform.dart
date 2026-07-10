@@ -1,6 +1,33 @@
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:autogui/src/platform.dart';
 import 'package:autogui/src/keyboard.dart'; // For AutoGUIKey
+
+class MockPlatformScreen implements PlatformScreen {
+  MockPlatformScreen({Capture? nextCapture, this.trusted = true})
+    : nextCapture =
+          nextCapture ?? Capture(Uint8List.fromList([1, 2, 3, 255]), 1, 1);
+
+  final List<String> calls = [];
+  Capture nextCapture;
+  bool trusted;
+
+  @override
+  Capture capture(Rectangle<int>? region) {
+    calls.add(
+      region == null
+          ? 'capture(full)'
+          : 'capture(${region.left},${region.top},${region.width},${region.height})',
+    );
+    return nextCapture;
+  }
+
+  @override
+  bool isScreenCaptureTrusted() {
+    calls.add('isScreenCaptureTrusted');
+    return trusted;
+  }
+}
 
 class MockPlatformMouse implements PlatformMouse {
   final List<String> calls = [];
