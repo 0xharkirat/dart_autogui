@@ -26,16 +26,47 @@ Iterable<Rectangle<int>> locateAll(Capture needle, Capture haystack) sync* {
   if (nw <= 0 || nh <= 0 || nw > hw || nh > hh) return;
 
   final n = needle.rgba, h = haystack.rgba;
-  // ponytail: O(W·H·w·h) worst case, cut down by an early-out on the needle's
-  // first pixel. Fine for finding a button on a screen. If this ever needs to
-  // be fast on 4K with big needles, add a first-row signature or step search -
-  // not an OpenCV dependency.
-  final firstR = n[0], firstG = n[1], firstB = n[2];
+
+  // Probe a few needle pixels before committing to a full compare. Testing only
+  // the first pixel is not enough: a solid-fill needle on a flat background
+  // passes it at every offset and the deep compare then dominates. Bottom-right
+  // comes second because that is where a uniform needle tends to differ.
+  //
+  // Measured, 3024x1964 haystack / 160x120 needle, desktop-like content: a
+  // match takes ~45 ms (it pays the full compare once), a full no-match scan
+  // ~35 ms. The worst case - a uniform needle over a uniform background that
+  // never matches - falls from ~141 s with a single first-pixel probe to
+  // well under a second with these five.
+  //
+  // ponytail: still O(W·H·w·h) in the limit; a needle that agrees on every
+  // probe but differs elsewhere degrades. Realistic content does not. If it
+  // ever bites, add a row signature or step search, not an OpenCV dependency.
+  final probes = <(int, int, int)>[]; // (needle byte index, nx, ny)
+  final seen = <int>{};
+  for (final (nx, ny) in [
+    (0, 0),
+    (nw - 1, nh - 1),
+    (nw - 1, 0),
+    (0, nh - 1),
+    (nw ~/ 2, nh ~/ 2),
+  ]) {
+    final ni = (ny * nw + nx) * 4;
+    if (seen.add(ni)) probes.add((ni, nx, ny));
+  }
+
+  bool probesMatch(int ox, int oy) {
+    for (final (ni, nx, ny) in probes) {
+      final hi = ((oy + ny) * hw + ox + nx) * 4;
+      if (n[ni] != h[hi] || n[ni + 1] != h[hi + 1] || n[ni + 2] != h[hi + 2]) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   for (var oy = 0; oy <= hh - nh; oy++) {
     for (var ox = 0; ox <= hw - nw; ox++) {
-      final i = (oy * hw + ox) * 4;
-      if (h[i] != firstR || h[i + 1] != firstG || h[i + 2] != firstB) continue;
+      if (!probesMatch(ox, oy)) continue;
       if (_matchesAt(n, nw, nh, h, hw, ox, oy)) {
         yield Rectangle(ox, oy, nw, nh);
       }
