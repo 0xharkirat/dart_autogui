@@ -20,6 +20,11 @@ Rectangle<int>? locate(Capture needle, Capture haystack) {
 /// Matching is exact on the RGB channels; alpha is ignored, so a needle with
 /// transparency still has to match the colours underneath it. The result is
 /// lazy, so [locate] stops at the first hit.
+///
+/// Give it a *distinctive* needle. A flat or near-flat one matches the first
+/// similar-looking area in scan order, which is rarely the one you meant, and
+/// it is also the slow case: every near-flat offset passes the cheap probes
+/// below and pays for a deep comparison before it fails.
 Iterable<Rectangle<int>> locateAll(Capture needle, Capture haystack) sync* {
   final nw = needle.width, nh = needle.height;
   final hw = haystack.width, hh = haystack.height;

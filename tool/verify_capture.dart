@@ -115,36 +115,72 @@ void main() {
     );
 
     // Milestone C: crop a region off the screen, save it, then find it again.
-    // A correct round trip returns the exact logical rect we cropped.
-    const rx = 400, ry = 300, rw = 80, rh = 60;
+    // The crop must be visually distinctive: a flat patch legitimately matches
+    // the first flat area in scan order, so it would prove nothing about the
+    // coordinate mapping. Hunt for the most colour-varied block instead.
+    const rw = 80, rh = 60;
+    var best = const Point(0, 0);
+    var bestColours = -1;
+    for (var ly = 0; ly + rh < logical.y; ly += 60) {
+      for (var lx = 0; lx + rw < logical.x; lx += 80) {
+        final seen = <int>{};
+        for (var sy = 0; sy < rh; sy += 6) {
+          for (var sx = 0; sx < rw; sx += 8) {
+            final (r, g, b) = full.pixelAt(
+              (lx + sx) * scale,
+              (ly + sy) * scale,
+            );
+            seen.add((r << 16) | (g << 8) | b);
+          }
+        }
+        if (seen.length > bestColours) {
+          bestColours = seen.length;
+          best = Point(lx, ly);
+        }
+      }
+    }
+
     stdout.writeln('\n-- locate round trip --');
+    stdout.writeln(
+      'chose region (${best.x},${best.y}) ${rw}x$rh '
+      'with $bestColours distinct sampled colours',
+    );
+    if (bestColours < 8) {
+      stdout.writeln(
+        'WARN: screen is very uniform; the round trip below is weak. '
+        'Open something colourful and re-run.',
+      );
+    }
+
     Screen.screenshot(
-      region: const Rectangle(rx, ry, rw, rh),
+      region: Rectangle(best.x, best.y, rw, rh),
       filename: 'needle.png',
     );
     final clock = Stopwatch()..start();
     final found = Screen.locateOnScreen('needle.png');
     clock.stop();
+    final want = Rectangle(best.x, best.y, rw, rh);
     stdout.writeln(
-      'locateOnScreen -> $found  (expected Rectangle($rx, $ry, $rw, $rh))  '
-      'in ${clock.elapsedMilliseconds}ms',
+      '${found == want ? "OK  " : "FAIL"} locateOnScreen -> $found  '
+      '(expected $want)  in ${clock.elapsedMilliseconds}ms',
     );
     if (found == null) {
       stdout.writeln(
-        'NOT FOUND: the screen probably changed between the two captures. '
-        'Re-run over a static area.',
+        'NOT FOUND: the screen changed between the two captures. Re-run over a '
+        'static area.',
       );
-    } else if (found.left != rx || found.top != ry) {
+    } else if (found != want) {
       stdout.writeln(
-        'DIFFERENT SPOT: the cropped pattern also occurs earlier on screen '
-        '(a flat/repeating area). Pick a more distinctive region.',
+        'The pattern also occurs earlier in scan order, or the coordinate '
+        'mapping is wrong. Check whether the crop is genuinely unique.',
       );
     }
 
     final centre = Screen.locateCenterOnScreen('needle.png');
+    final wantCentre = Point(best.x + rw ~/ 2, best.y + rh ~/ 2);
     stdout.writeln(
-      'locateCenterOnScreen -> $centre  '
-      '(expected Point(${rx + rw ~/ 2}, ${ry + rh ~/ 2}))',
+      '${centre == wantCentre ? "OK  " : "FAIL"} locateCenterOnScreen -> '
+      '$centre  (expected $wantCentre)',
     );
 
     stdout.writeln('\nOK');
