@@ -2,7 +2,10 @@
 
 `autogui` is a Dart package for cross-platform GUI automation. It enables you to programmatically control desktop mouse and keyboard actions from Dart using FFI and native platform APIs.
 
-**Note:** This package is under development. It is implemented purely in Dart using FFI bindings to C and platform-native interfaces. There are **no dependencies on Python or external runtimes**.
+> [!NOTE]
+> This package is under development. It is implemented purely in Dart using FFI
+> bindings to C and platform-native interfaces. There are **no dependencies on
+> Python or external runtimes**.
 
 ## Features
 
@@ -27,15 +30,17 @@ friends) is **only verified on macOS**:
 | Linux | Implemented, **not yet tested** | X11 only (`XGetImage`); no Wayland support |
 | Windows | Implemented, **not yet tested** | GDI (`BitBlt`) |
 
-The Linux and Windows capture backends are written and code-reviewed but have
-never been compiled or run by the author. Treat them as unproven, and please
-report what you find.
+> [!WARNING]
+> The Linux and Windows capture backends are written and code-reviewed but have
+> **never been compiled or run** by the author. Treat them as unproven, and
+> please report what you find. Mouse and keyboard automation are unaffected.
 
-On macOS the process that runs your Dart program needs Screen Recording
-permission (System Settings > Privacy & Security > Screen Recording) - that is
-the terminal or host application, not `dart` itself. Without it,
-`Screen.screenshot` throws a `StateError`. Check first with
-`Screen.isScreenCaptureTrusted`.
+> [!IMPORTANT]
+> On macOS the process running your Dart program needs **Screen Recording**
+> permission (System Settings → Privacy & Security → Screen Recording). That is
+> the terminal or host application, not `dart` itself, and it must be restarted
+> after you grant it. Without it, `Screen.screenshot` throws a `StateError`.
+> Check first with `Screen.isScreenCaptureTrusted`.
 
 ## Installation
 
@@ -62,7 +67,11 @@ Use the `Mouse` class to control the cursor.
 - **`Mouse.position()`**: Returns `Point<double>(x, y)` of the current mouse position in global desktop coordinates.
 - **`Screen.onScreen(x, y)`**: Checks if coordinates are within the screen bounds.
 
-> **Note**: On multi-monitor macOS setups, `Mouse.position()` can legitimately return negative `x` or `y` values when the cursor is on a display positioned left of or above the primary display. `Screen.size()` and `Screen.onScreen()` currently describe the primary display only.
+> [!NOTE]
+> On multi-monitor macOS setups, `Mouse.position()` can legitimately return
+> negative `x` or `y` values when the cursor is on a display positioned left of
+> or above the primary display. `Screen.size()` and `Screen.onScreen()` describe
+> the primary display only.
 
 #### Movement
 - **`Mouse.moveTo(x, y, {duration, easing})`**: Moves mouse to absolute coordinates.
@@ -124,13 +133,15 @@ final button = Screen.locateCenterOnScreen('button.png');
 if (button != null) Mouse.click(x: button.x, y: button.y);
 ```
 
-A `Capture` holds **physical** pixels, which on a HiDPI display are the logical
-size times the backing scale factor (2x on Retina). Use `Capture.toLogical` to
-convert, or stay in logical coordinates by using the `Screen.locate*` helpers.
+> [!NOTE]
+> A `Capture` holds **physical** pixels, which on a HiDPI display are the logical
+> size times the backing scale factor (2x on Retina). Use `Capture.toLogical` to
+> convert, or stay in logical coordinates by using the `Screen.locate*` helpers.
 
-Matching is **exact** on RGB; alpha is ignored and there is no `confidence`
-option. Give it a distinctive needle: a flat one matches the first similar patch
-in scan order, and is also the slow case.
+> [!TIP]
+> Matching is **exact** on RGB - alpha is ignored, and there is no `confidence`
+> option. Give it a distinctive needle: a flat one matches the first similar
+> patch in scan order, and is also the slow case.
 
 ### Fail-safe
 
