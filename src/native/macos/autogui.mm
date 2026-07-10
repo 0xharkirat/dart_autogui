@@ -170,7 +170,20 @@ static CGImageRef _dag_sck_capture(int x, int y, int w, int h) {
   if (!content || content.displays.count == 0)
     return NULL;
 
-  SCDisplay *display = content.displays.firstObject;
+  // Must be the *main* display: dag_get_screen_size uses CGMainDisplayID, and
+  // the caller's scale and origin are derived from it. displays.firstObject is
+  // not documented to be the main one, so match on displayID.
+  CGDirectDisplayID mainID = CGMainDisplayID();
+  SCDisplay *display = nil;
+  for (SCDisplay *candidate in content.displays) {
+    if (candidate.displayID == mainID) {
+      display = candidate;
+      break;
+    }
+  }
+  if (!display)
+    display = content.displays.firstObject;
+
   SCContentFilter *filter =
       [[SCContentFilter alloc] initWithDisplay:display excludingWindows:@[]];
 
@@ -188,18 +201,38 @@ static CGImageRef _dag_sck_capture(int x, int y, int w, int h) {
     cfg.height = (size_t)(r.size.height * scale);
   }
 
+  // CGImageRef is a CF type, so ARC will not manage it: the block retains and
+  // the caller releases. If the wait times out we abandon the call, and a late
+  // completion handler must not retain into an orphan. The lock makes the
+  // hand-off atomic - either the block claims it before we give up, or it sees
+  // `abandoned` and retains nothing. The race where it lands in between is
+  // covered by releasing whatever it did set.
   __block CGImageRef out = NULL;
+  __block BOOL abandoned = NO;
+  NSObject *claim = [NSObject new];
   dispatch_semaphore_t shot = dispatch_semaphore_create(0);
   [SCScreenshotManager captureImageWithFilter:filter
                                 configuration:cfg
                             completionHandler:^(CGImageRef img, NSError *err) {
-                              if (img)
-                                out = (CGImageRef)CFRetain(img);
+                              @synchronized(claim) {
+                                if (abandoned)
+                                  return;
+                                if (img)
+                                  out = (CGImageRef)CFRetain(img);
+                              }
                               dispatch_semaphore_signal(shot);
                             }];
   if (dispatch_semaphore_wait(
-          shot, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0)
+          shot, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0) {
+    @synchronized(claim) {
+      abandoned = YES;
+      if (out) {
+        CGImageRelease(out);
+        out = NULL;
+      }
+    }
     return NULL;
+  }
   return out; // caller releases
 }
 

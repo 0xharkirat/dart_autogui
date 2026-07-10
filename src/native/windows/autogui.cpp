@@ -150,7 +150,15 @@ EXPORT unsigned char *dag_capture_screen(int x, int y, int w, int h, int *out_w,
   }
 
   HGDIOBJ old = SelectObject(mem, bmp);
-  BitBlt(mem, 0, 0, w, h, screen, x, y, SRCCOPY);
+  // A failed BitBlt leaves the bitmap untouched, and GetDIBits would happily
+  // hand back that black/garbage buffer as if it were a capture.
+  if (!BitBlt(mem, 0, 0, w, h, screen, x, y, SRCCOPY)) {
+    SelectObject(mem, old);
+    DeleteObject(bmp);
+    DeleteDC(mem);
+    ReleaseDC(NULL, screen);
+    return NULL;
+  }
 
   BITMAPINFO bi = {};
   bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);

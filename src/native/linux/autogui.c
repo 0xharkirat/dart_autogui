@@ -172,6 +172,18 @@ static int _mask_shift(unsigned long mask) {
     return shift;
 }
 
+// Extracts one channel and widens it to 0-255. A depth-24/32 visual has an
+// 8-bit mask and this is the identity; a 16-bit visual (RGB565) has 5- and
+// 6-bit channels that would otherwise come out far too dark.
+static unsigned char _channel(unsigned long pixel, unsigned long mask, int shift) {
+    if (!mask) return 0;
+    unsigned long max = mask >> shift;
+    if (max == 0) return 0;
+    unsigned long value = (pixel & mask) >> shift;
+    if (max == 255) return (unsigned char)value;
+    return (unsigned char)((value * 255UL) / max);
+}
+
 // ponytail: XGetPixel per pixel, one call per pixel. Fine for occasional
 // captures; switch to XShmGetImage with direct buffer access if capture rate
 // ever matters.
@@ -182,13 +194,24 @@ EXPORT unsigned char* dag_capture_screen(int x, int y, int w, int h, int* out_w,
     Display* d = XOpenDisplay(NULL);
     if (!d) return NULL;
     Window root = DefaultRootWindow(d);
+    int s = DefaultScreen(d);
+    int sw = DisplayWidth(d, s);
+    int sh = DisplayHeight(d, s);
 
     if (w <= 0 || h <= 0) {
-        int s = DefaultScreen(d);
         x = 0; y = 0;
-        w = DisplayWidth(d, s);
-        h = DisplayHeight(d, s);
+        w = sw;
+        h = sh;
     }
+
+    // XGetImage raises BadMatch for any area outside the drawable, and Xlib's
+    // default error handler terminates the host process. Clamp instead.
+    if (x < 0) { w += x; x = 0; }
+    if (y < 0) { h += y; y = 0; }
+    if (x >= sw || y >= sh) { XCloseDisplay(d); return NULL; }
+    if (x + w > sw) w = sw - x;
+    if (y + h > sh) h = sh - y;
+    if (w <= 0 || h <= 0) { XCloseDisplay(d); return NULL; }
 
     XImage* img = XGetImage(d, root, x, y, w, h, AllPlanes, ZPixmap);
     if (!img) { XCloseDisplay(d); return NULL; }
@@ -204,9 +227,9 @@ EXPORT unsigned char* dag_capture_screen(int x, int y, int w, int h, int* out_w,
         for (int px = 0; px < w; px++) {
             unsigned long p = XGetPixel(img, px, py);
             size_t i = ((size_t)py * (size_t)w + (size_t)px) * 4;
-            buf[i + 0] = (unsigned char)((p & img->red_mask) >> rs);
-            buf[i + 1] = (unsigned char)((p & img->green_mask) >> gs);
-            buf[i + 2] = (unsigned char)((p & img->blue_mask) >> bs);
+            buf[i + 0] = _channel(p, img->red_mask, rs);
+            buf[i + 1] = _channel(p, img->green_mask, gs);
+            buf[i + 2] = _channel(p, img->blue_mask, bs);
             buf[i + 3] = 255;
         }
     }

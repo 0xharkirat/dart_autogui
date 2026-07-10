@@ -227,22 +227,29 @@ class _NativeScreen implements PlatformScreen {
 
   @override
   Capture capture(Rectangle<int>? region) {
+    // A non-positive region makes the native side capture the full display, so
+    // resolve it to null here as well - otherwise scale and origin would be
+    // computed against a region that was never used.
+    final area = (region == null || region.width <= 0 || region.height <= 0)
+        ? null
+        : region;
+
     final (bytes, w, h) = _b.captureScreen(
-      region?.left ?? 0,
-      region?.top ?? 0,
-      region?.width ?? 0,
-      region?.height ?? 0,
+      area?.left ?? 0,
+      area?.top ?? 0,
+      area?.width ?? 0,
+      area?.height ?? 0,
     );
     // The native layer takes a logical rect and hands back physical pixels, so
     // the scale falls out of the two widths.
-    final logicalWidth = region?.width ?? _b.screenSize().x;
+    final logicalWidth = area?.width ?? _b.screenSize().x;
     final scale = logicalWidth > 0 ? w / logicalWidth : 1.0;
     return Capture(
       bytes,
       w,
       h,
       scale: scale,
-      origin: Point(region?.left ?? 0, region?.top ?? 0),
+      origin: Point(area?.left ?? 0, area?.top ?? 0),
     );
   }
 
