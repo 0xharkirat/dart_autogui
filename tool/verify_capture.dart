@@ -44,26 +44,62 @@ void main() {
       '(${File('capture_full.png').lengthSync()} bytes)',
     );
 
-    // Screen.pixel takes LOGICAL coords. It must agree with the full capture
-    // read at those coords scaled to physical pixels. This is the check that
-    // proves the logical->physical mapping.
+    // Screen.pixel takes LOGICAL coords and must read the PHYSICAL pixel at
+    // (x*scale, y*scale). Probing a flat-colored area proves nothing, so hunt
+    // for points where the scaled and unscaled reads actually differ - there a
+    // wrong mapping cannot silently pass.
     final scale = full.width ~/ logical.x;
     stdout.writeln('\n-- pixel() vs full capture (scale $scale) --');
+
+    // The value of the scale x scale physical block behind a logical pixel,
+    // but only when the block is uniform - so sub-pixel drift can't flap.
+    (int, int, int)? uniformBlock(int lx, int ly) {
+      final first = full.pixelAt(lx * scale, ly * scale);
+      for (var dy = 0; dy < scale; dy++) {
+        for (var dx = 0; dx < scale; dx++) {
+          if (full.pixelAt(lx * scale + dx, ly * scale + dy) != first) {
+            return null;
+          }
+        }
+      }
+      return first;
+    }
+
+    final probes = <Point<int>>[];
+    if (scale > 1) {
+      for (var y = 1; y < logical.y - 1 && probes.length < 3; y += 29) {
+        for (var x = 1; x < logical.x - 1 && probes.length < 3; x += 41) {
+          final scaled = uniformBlock(x, y);
+          if (scaled != null && scaled != full.pixelAt(x, y)) {
+            probes.add(Point(x, y));
+          }
+        }
+      }
+    }
+
     var mapped = true;
-    for (final p in const [Point(0, 0), Point(5, 5), Point(200, 3)]) {
-      final direct = Screen.pixel(p.x, p.y);
-      final fromFull = full.pixelAt(p.x * scale, p.y * scale);
-      final ok = direct == fromFull;
-      if (!ok) mapped = false;
-      stdout.writeln(
-        '${ok ? "OK " : "DIFF"} pixel(${p.x},${p.y})=$direct  '
-        'full.pixelAt(${p.x * scale},${p.y * scale})=$fromFull',
-      );
+    if (scale == 1) {
+      stdout.writeln('scale is 1: logical == physical, mapping is identity');
+    } else if (probes.isEmpty) {
+      stdout.writeln('WARN: screen too uniform to find a discriminating probe');
+    } else {
+      for (final p in probes) {
+        final scaled = full.pixelAt(p.x * scale, p.y * scale);
+        final unscaled = full.pixelAt(p.x, p.y);
+        final got = Screen.pixel(p.x, p.y);
+        final ok = got == scaled;
+        if (!ok) mapped = false;
+        stdout.writeln(
+          '${ok ? "OK  " : "FAIL"} pixel(${p.x},${p.y})=$got  '
+          'scaled=$scaled  unscaled=$unscaled',
+        );
+      }
     }
     if (!mapped) {
       stdout.writeln(
-        'NOTE: a DIFF can just mean the screen changed between the two '
-        'captures (live content). Re-run over a static area to confirm.',
+        'FAIL means pixel() did not read the scaled pixel. If it matched '
+        '"unscaled", the logical->physical mapping is broken. If it matched '
+        'neither, live screen content changed between captures - re-run.',
       );
     }
 
