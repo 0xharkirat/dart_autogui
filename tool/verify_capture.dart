@@ -19,7 +19,9 @@ void main() {
 
   try {
     final full = Screen.screenshot(filename: 'capture_full.png');
-    stdout.writeln('full capture (physical px): ${full.width} x ${full.height}');
+    stdout.writeln(
+      'full capture (physical px): ${full.width} x ${full.height}',
+    );
     stdout.writeln(
       'scale: ${(full.width / logical.x).toStringAsFixed(2)}x '
       '${(full.height / logical.y).toStringAsFixed(2)}',
@@ -37,9 +39,46 @@ void main() {
       'region 10x10 logical -> ${region.width} x ${region.height} physical',
     );
 
-    stdout.writeln('wrote capture_full.png '
-        '(${File('capture_full.png').lengthSync()} bytes)');
-    stdout.writeln('OK');
+    stdout.writeln(
+      'wrote capture_full.png '
+      '(${File('capture_full.png').lengthSync()} bytes)',
+    );
+
+    // Screen.pixel takes LOGICAL coords. It must agree with the full capture
+    // read at those coords scaled to physical pixels. This is the check that
+    // proves the logical->physical mapping.
+    final scale = full.width ~/ logical.x;
+    stdout.writeln('\n-- pixel() vs full capture (scale $scale) --');
+    var mapped = true;
+    for (final p in const [Point(0, 0), Point(5, 5), Point(200, 3)]) {
+      final direct = Screen.pixel(p.x, p.y);
+      final fromFull = full.pixelAt(p.x * scale, p.y * scale);
+      final ok = direct == fromFull;
+      if (!ok) mapped = false;
+      stdout.writeln(
+        '${ok ? "OK " : "DIFF"} pixel(${p.x},${p.y})=$direct  '
+        'full.pixelAt(${p.x * scale},${p.y * scale})=$fromFull',
+      );
+    }
+    if (!mapped) {
+      stdout.writeln(
+        'NOTE: a DIFF can just mean the screen changed between the two '
+        'captures (live content). Re-run over a static area to confirm.',
+      );
+    }
+
+    final here = Screen.pixel(0, 0);
+    stdout.writeln(
+      'pixelMatchesColor(0,0, $here) = '
+      '${Screen.pixelMatchesColor(0, 0, here)} (expect true)',
+    );
+    stdout.writeln(
+      'pixelMatchesColor(0,0, (0,0,0), tolerance: 255) = '
+      '${Screen.pixelMatchesColor(0, 0, (0, 0, 0), tolerance: 255)} '
+      '(expect true)',
+    );
+
+    stdout.writeln('\nOK');
   } on StateError catch (e) {
     stdout.writeln('CAPTURE FAILED: ${e.message}');
     exitCode = 1;

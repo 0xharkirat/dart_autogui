@@ -157,20 +157,21 @@ fully unit-testable against synthetic `Capture` buffers (no real screen needed).
 
 ## 7. Risks & open questions
 
-1. **Retina / DPI scaling (primary risk, still open).** On HiDPI, native capture
-   returns *physical* pixels while `dag_get_screen_size` and mouse coords are
-   *logical* points (dev machine reports `Screen.size() = 1512×982`, so a full
-   capture should come back 3024×1964). `pixel(x,y)` must use the same space as
-   the mouse or every coordinate is off by the scale factor. `Capture` currently
-   exposes physical `width`/`height`; **Milestone B must map logical→physical**
-   so callers stay in one space. Not yet verified empirically - blocked on (2).
-2. **macOS Screen Recording permission (blocks verification).** Confirmed
-   `Screen.isScreenCaptureTrusted` correctly reports `false` and `screenshot()`
-   throws a clear `StateError` when ungranted. Actual pixel capture is therefore
-   **unverified**: grant Screen Recording to the terminal/host in
-   System Settings → Privacy & Security → Screen Recording, then re-run the
-   smoke test. Consider adding `dag_request_screen_capture_access()`
-   (`CGRequestScreenCaptureAccess`) so the OS prompt can be triggered from Dart.
+1. **Retina / DPI scaling - RESOLVED.** Measured on a HiDPI Mac:
+   `Screen.size()` = 1512×982 logical points, a full capture returns 3024×1964
+   physical pixels (scale 2.00), and a 10×10 logical region returns 20×20
+   physical. So the ABI contract holds: **input rects are logical points, output
+   buffers are physical pixels**, regions included. `Screen.pixel(x, y)`
+   therefore needs no scale math - it captures a 1×1 *logical* region and reads
+   its top-left physical pixel. Only `locate*` (Milestone C) needs the scale, to
+   convert a physical match rect back to logical coordinates for `Mouse.click`.
+2. **macOS Screen Recording permission.** `Screen.isScreenCaptureTrusted`
+   correctly reports `false` and `screenshot()` throws a clear `StateError` when
+   ungranted. TCC attributes the grant to the *responsible app* (the terminal or
+   host application), not to `dart`; grant it in System Settings → Privacy &
+   Security → Screen Recording and restart that app. Consider adding
+   `dag_request_screen_capture_access()` (`CGRequestScreenCaptureAccess`) so the
+   OS prompt can be triggered from Dart.
 3. **Linux/Windows capture is unverified** - written and compile-reviewed, but
    built and smoke-tested on macOS only. Needs a real run on each OS.
 4. **Native buffer ownership** - the FFI wrapper copies then calls

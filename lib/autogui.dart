@@ -42,6 +42,10 @@ double easeInElastic(double t) {
   return -pow(2, 10 * t - 10).toDouble() * sin((t * 10 - 10.75) * c4);
 }
 
+/// The center point of [box].
+Point<int> center(Rectangle<int> box) =>
+    Point(box.left + box.width ~/ 2, box.top + box.height ~/ 2);
+
 class Screen {
   /// Returns the primary screen size in pixels.
   static Point<int> size() => platformMouse.screenSize();
@@ -85,6 +89,32 @@ class Screen {
       File(filename).writeAsBytesSync(img.encodePng(image));
     }
     return capture;
+  }
+
+  /// The `(r, g, b)` color of the screen pixel at logical ([x], [y]) - the same
+  /// coordinate space as [Mouse.position].
+  ///
+  /// Captures a 1x1 logical region, which on a HiDPI display is several
+  /// physical pixels; the top-left one is returned.
+  ///
+  /// Each call performs its own screen capture, which is not cheap. To read
+  /// many pixels, take one [screenshot] and use [Capture.pixelAt].
+  static (int, int, int) pixel(int x, int y) =>
+      screenshot(region: Rectangle(x, y, 1, 1)).pixelAt(0, 0);
+
+  /// Whether the screen pixel at logical ([x], [y]) matches [rgb], allowing a
+  /// per-channel absolute difference of up to [tolerance].
+  static bool pixelMatchesColor(
+    int x,
+    int y,
+    (int, int, int) rgb, {
+    int tolerance = 0,
+  }) {
+    final (r, g, b) = pixel(x, y);
+    final (wantR, wantG, wantB) = rgb;
+    return (r - wantR).abs() <= tolerance &&
+        (g - wantG).abs() <= tolerance &&
+        (b - wantB).abs() <= tolerance;
   }
 }
 

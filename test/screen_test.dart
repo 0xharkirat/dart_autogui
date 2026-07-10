@@ -72,4 +72,71 @@ void main() {
       expect(Screen.isScreenCaptureTrusted, isTrue);
     });
   });
+
+  group('Screen.pixel', () {
+    late MockPlatformScreen mockScreen;
+
+    setUp(() {
+      mockScreen = MockPlatformScreen();
+      platformScreenInstance = mockScreen;
+    });
+
+    test('captures a 1x1 logical region at the requested point', () {
+      mockScreen.nextCapture = Capture(
+        Uint8List.fromList([7, 8, 9, 255]),
+        1,
+        1,
+      );
+      expect(Screen.pixel(42, 17), (7, 8, 9));
+      expect(mockScreen.calls, contains('capture(42,17,1,1)'));
+    });
+
+    test('reads the top-left physical pixel on a HiDPI capture', () {
+      // A 1x1 logical request comes back 2x2 physical at scale 2.
+      final bytes = Uint8List.fromList([
+        10, 20, 30, 255, 99, 99, 99, 255, // row 0
+        99, 99, 99, 255, 99, 99, 99, 255, // row 1
+      ]);
+      mockScreen.nextCapture = Capture(bytes, 2, 2);
+      expect(Screen.pixel(0, 0), (10, 20, 30));
+    });
+
+    test('pixelMatchesColor is exact when tolerance is zero', () {
+      mockScreen.nextCapture = Capture(
+        Uint8List.fromList([100, 150, 200, 255]),
+        1,
+        1,
+      );
+      expect(Screen.pixelMatchesColor(0, 0, (100, 150, 200)), isTrue);
+      expect(Screen.pixelMatchesColor(0, 0, (100, 150, 201)), isFalse);
+    });
+
+    test('pixelMatchesColor honors a per-channel tolerance', () {
+      mockScreen.nextCapture = Capture(
+        Uint8List.fromList([100, 150, 200, 255]),
+        1,
+        1,
+      );
+      expect(
+        Screen.pixelMatchesColor(0, 0, (105, 145, 200), tolerance: 5),
+        isTrue,
+      );
+      // Green is 6 off, one past the tolerance.
+      expect(
+        Screen.pixelMatchesColor(0, 0, (105, 144, 200), tolerance: 5),
+        isFalse,
+      );
+    });
+  });
+
+  group('center', () {
+    test('finds the middle of a box', () {
+      expect(center(const Rectangle(0, 0, 10, 20)), const Point(5, 10));
+      expect(center(const Rectangle(100, 200, 30, 40)), const Point(115, 220));
+    });
+
+    test('truncates on odd dimensions', () {
+      expect(center(const Rectangle(0, 0, 5, 5)), const Point(2, 2));
+    });
+  });
 }
