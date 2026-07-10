@@ -143,12 +143,17 @@ one place a heavier dep might later be justified, and only then.
 
 ## 6. Milestones (each its own topic branch → cross-review → merge)
 
-- **A - Capture**: native `dag_capture_screen`/`dag_free_image` on all 3 OSes,
+- **A - Capture** *(implemented)*: native `dag_capture_screen`/`dag_free_image` on all 3 OSes,
   FFI wiring, `Screen.screenshot()` + PNG file save, macOS permission check +
   README note, `package:image` dep. Resolves the coordinate-space question (§7).
-- **B - Pixel**: `Screen.pixel`, `pixelMatchesColor`, `center`. Pure Dart over A.
-- **C - Locate**: `locateOnScreen`/`locateAllOnScreen`/`locateCenterOnScreen` +
-  `locate`/`locateAll`, naive matcher. Pure Dart over A + `package:image` decode.
+- **B - Pixel** *(implemented)*: `Screen.pixel`, `pixelMatchesColor`, `center`.
+  Pure Dart over A; `pixel` captures a 1x1 logical region so it needs no scale
+  math.
+- **C - Locate** *(implemented)*: `locateOnScreen`/`locateAllOnScreen`/
+  `locateCenterOnScreen` + `locate`/`locateAll`, naive exact matcher in
+  `lib/src/locate.dart`. Matching runs in physical pixels; results convert back
+  to logical via `Capture.toLogical` (which is why `Capture` gained `scale` and
+  `origin`). Alpha is ignored - RGB must match exactly.
 - **D - Defer**: `confidence`/`grayscale`, `XShm`/ScreenCaptureKit perf,
   multi-monitor virtual desktop, `displayMousePosition` RGB.
 

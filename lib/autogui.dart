@@ -1,8 +1,11 @@
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:image/image.dart' as img;
+import 'src/locate.dart';
 import 'src/platform.dart';
 export 'src/keyboard.dart';
+export 'src/locate.dart';
 export 'src/platform.dart'
     show MouseButton, FailSafe, FailSafeException, Capture;
 
@@ -115,6 +118,68 @@ class Screen {
     return (r - wantR).abs() <= tolerance &&
         (g - wantG).abs() <= tolerance &&
         (b - wantB).abs() <= tolerance;
+  }
+
+  /// Finds the image at [imagePath] on screen, searching [region] if given.
+  ///
+  /// Returns the match in *logical* coordinates - ready for [Mouse.click] - or
+  /// null when it is not found. Matching is exact, so the needle must have been
+  /// captured at the same scale as the screen (a PNG saved by [screenshot] on
+  /// this display qualifies).
+  static Rectangle<int>? locateOnScreen(
+    String imagePath, {
+    Rectangle<int>? region,
+  }) {
+    final haystack = screenshot(region: region);
+    final match = locate(_decodeNeedle(imagePath), haystack);
+    return match == null ? null : _toLogicalRect(match, haystack);
+  }
+
+  /// Every on-screen occurrence of the image at [imagePath], in logical
+  /// coordinates.
+  static List<Rectangle<int>> locateAllOnScreen(
+    String imagePath, {
+    Rectangle<int>? region,
+  }) {
+    final haystack = screenshot(region: region);
+    return locateAll(
+      _decodeNeedle(imagePath),
+      haystack,
+    ).map((m) => _toLogicalRect(m, haystack)).toList(growable: false);
+  }
+
+  /// The center of the first on-screen match, in logical coordinates, or null.
+  static Point<int>? locateCenterOnScreen(
+    String imagePath, {
+    Rectangle<int>? region,
+  }) {
+    final box = locateOnScreen(imagePath, region: region);
+    return box == null ? null : center(box);
+  }
+
+  static Capture _decodeNeedle(String imagePath) {
+    final decoded = img.decodeImage(File(imagePath).readAsBytesSync());
+    if (decoded == null) {
+      throw ArgumentError.value(
+        imagePath,
+        'imagePath',
+        'Not a decodable image',
+      );
+    }
+    final rgba = decoded
+        .convert(numChannels: 4)
+        .getBytes(order: img.ChannelOrder.rgba);
+    return Capture(Uint8List.fromList(rgba), decoded.width, decoded.height);
+  }
+
+  static Rectangle<int> _toLogicalRect(Rectangle<int> physical, Capture in_) {
+    final topLeft = in_.toLogical(physical.left, physical.top);
+    return Rectangle(
+      topLeft.x,
+      topLeft.y,
+      (physical.width / in_.scale).round(),
+      (physical.height / in_.scale).round(),
+    );
   }
 }
 

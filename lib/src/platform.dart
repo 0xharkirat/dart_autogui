@@ -27,7 +27,13 @@ abstract class PlatformKeyboard {
 
 /// A raw screen capture: RGBA8888 bytes plus their physical pixel dimensions.
 class Capture {
-  const Capture(this.rgba, this.width, this.height);
+  const Capture(
+    this.rgba,
+    this.width,
+    this.height, {
+    this.scale = 1.0,
+    this.origin = const Point(0, 0),
+  });
 
   /// `width * height * 4` bytes, row-major, no row padding.
   final Uint8List rgba;
@@ -38,6 +44,13 @@ class Capture {
   final int width;
   final int height;
 
+  /// Physical pixels per logical point (2.0 on a typical Retina display).
+  final double scale;
+
+  /// Logical screen coordinate of this capture's top-left corner. Non-zero when
+  /// only a region was captured.
+  final Point<int> origin;
+
   /// The `(r, g, b)` of the pixel at physical coordinates ([x], [y]).
   (int, int, int) pixelAt(int x, int y) {
     if (x < 0 || y < 0 || x >= width || y >= height) {
@@ -46,6 +59,11 @@ class Capture {
     final i = (y * width + x) * 4;
     return (rgba[i], rgba[i + 1], rgba[i + 2]);
   }
+
+  /// Maps physical coordinates inside this capture to absolute logical screen
+  /// coordinates - the space [Mouse.moveTo] and [Mouse.click] expect.
+  Point<int> toLogical(int x, int y) =>
+      Point(origin.x + (x / scale).round(), origin.y + (y / scale).round());
 }
 
 abstract class PlatformScreen {
@@ -215,7 +233,17 @@ class _NativeScreen implements PlatformScreen {
       region?.width ?? 0,
       region?.height ?? 0,
     );
-    return Capture(bytes, w, h);
+    // The native layer takes a logical rect and hands back physical pixels, so
+    // the scale falls out of the two widths.
+    final logicalWidth = region?.width ?? _b.screenSize().x;
+    final scale = logicalWidth > 0 ? w / logicalWidth : 1.0;
+    return Capture(
+      bytes,
+      w,
+      h,
+      scale: scale,
+      origin: Point(region?.left ?? 0, region?.top ?? 0),
+    );
   }
 
   @override

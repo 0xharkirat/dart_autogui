@@ -114,6 +114,39 @@ void main() {
       '(expect true)',
     );
 
+    // Milestone C: crop a region off the screen, save it, then find it again.
+    // A correct round trip returns the exact logical rect we cropped.
+    const rx = 400, ry = 300, rw = 80, rh = 60;
+    stdout.writeln('\n-- locate round trip --');
+    Screen.screenshot(
+      region: const Rectangle(rx, ry, rw, rh),
+      filename: 'needle.png',
+    );
+    final clock = Stopwatch()..start();
+    final found = Screen.locateOnScreen('needle.png');
+    clock.stop();
+    stdout.writeln(
+      'locateOnScreen -> $found  (expected Rectangle($rx, $ry, $rw, $rh))  '
+      'in ${clock.elapsedMilliseconds}ms',
+    );
+    if (found == null) {
+      stdout.writeln(
+        'NOT FOUND: the screen probably changed between the two captures. '
+        'Re-run over a static area.',
+      );
+    } else if (found.left != rx || found.top != ry) {
+      stdout.writeln(
+        'DIFFERENT SPOT: the cropped pattern also occurs earlier on screen '
+        '(a flat/repeating area). Pick a more distinctive region.',
+      );
+    }
+
+    final centre = Screen.locateCenterOnScreen('needle.png');
+    stdout.writeln(
+      'locateCenterOnScreen -> $centre  '
+      '(expected Point(${rx + rw ~/ 2}, ${ry + rh ~/ 2}))',
+    );
+
     stdout.writeln('\nOK');
   } on StateError catch (e) {
     stdout.writeln('CAPTURE FAILED: ${e.message}');
