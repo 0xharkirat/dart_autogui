@@ -47,7 +47,7 @@ friends) is **only verified on macOS**:
 1. Add the dependency:
 ```yaml
 dependencies:
-  autogui: ^1.1.0
+  autogui: ^1.3.0
 ```
 
 2. **Setup Native Library**:

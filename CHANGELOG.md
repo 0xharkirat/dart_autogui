@@ -1,3 +1,22 @@
+## 1.3.0
+
+Adds screen capture and on-screen image location.
+
+> [!WARNING]
+> Screen capture is **only tested on macOS**. The Linux and Windows backends are implemented and code-reviewed but have never been compiled or run. Treat them as unproven. Mouse and keyboard automation are unaffected.
+
+> [!IMPORTANT]
+> On macOS, screen capture requires **macOS 14 or newer** and Screen Recording permission for the process running your program (the terminal or host app, not `dart` itself). Without it, `Screen.screenshot` throws a `StateError`; check `Screen.isScreenCaptureTrusted` first.
+
+- Add `Screen.screenshot({region, filename})`, which captures the primary display or a region of it and can write a PNG.
+- Add `Screen.pixel(x, y)` and `Screen.pixelMatchesColor(x, y, rgb, {tolerance})`.
+- Add `Screen.locateOnScreen`, `Screen.locateAllOnScreen`, and `Screen.locateCenterOnScreen`, plus the image-to-image `locate`/`locateAll` and a top-level `center(box)`. Matching is exact on RGB; alpha is ignored and there is no `confidence` option.
+- Add `Capture` (raw RGBA pixels, physical dimensions, `pixelAt`, `toLogical`) and `Screen.isScreenCaptureTrusted`.
+- Coordinates crossing the API are logical, the same space as `Mouse.position`, so a match feeds straight into `Mouse.click`. A `Capture` holds physical pixels, which on a HiDPI display are the logical size times the backing scale factor.
+- A capture region that runs past the edge of the display is clipped to it; one entirely off-display throws `ArgumentError`.
+- Capture covers the primary display only. Linux support is X11 only, with no Wayland.
+- Adds a dependency on `package:image`, used only to encode and decode PNG.
+
 ## 1.2.1
 
 - Fix `Mouse.mouseUp` so a screen-corner fail-safe can no longer strand a held button down mid-drag; releasing a button is never blocked.
