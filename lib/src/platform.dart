@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 import 'ffi/bindings.dart';
 import 'keyboard.dart';
 
@@ -22,6 +23,76 @@ abstract class PlatformKeyboard {
   void keyUp(int keycode);
   KeyStroke? charToKeyStroke(String char);
   int? mapKey(AutoGUIKey key);
+}
+
+/// A raw screen capture: RGBA8888 bytes plus their physical pixel dimensions.
+class Capture {
+  const Capture(
+    this.rgba,
+    this.width,
+    this.height, {
+    this.scale = 1.0,
+    this.origin = const Point(0, 0),
+  });
+
+  /// `width * height * 4` bytes, row-major, no row padding.
+  final Uint8List rgba;
+
+  /// Physical pixel dimensions. On a HiDPI display these are the requested
+  /// logical size multiplied by the display's backing scale factor, so they can
+  /// exceed `Screen.size()`.
+  final int width;
+  final int height;
+
+  /// Physical pixels per logical point (2.0 on a typical Retina display).
+  final double scale;
+
+  /// Logical screen coordinate of this capture's top-left corner. Non-zero when
+  /// only a region was captured.
+  final Point<int> origin;
+
+  /// The `(r, g, b)` of the pixel at physical coordinates ([x], [y]).
+  (int, int, int) pixelAt(int x, int y) {
+    if (x < 0 || y < 0 || x >= width || y >= height) {
+      throw RangeError('($x, $y) is outside the ${width}x$height capture');
+    }
+    final i = (y * width + x) * 4;
+    return (rgba[i], rgba[i + 1], rgba[i + 2]);
+  }
+
+  /// Maps physical coordinates inside this capture to absolute logical screen
+  /// coordinates - the space [Mouse.moveTo] and [Mouse.click] expect.
+  Point<int> toLogical(int x, int y) =>
+      Point(origin.x + (x / scale).round(), origin.y + (y / scale).round());
+}
+
+abstract class PlatformScreen {
+  /// Captures [region] (logical coordinates) or the whole primary display.
+  Capture capture(Rectangle<int>? region);
+  bool isScreenCaptureTrusted();
+}
+
+/// Clips [region] to a [screen]-sized display, returning null for a full-display
+/// capture (a null or zero-area [region], both of which the native layer treats
+/// as "capture everything").
+///
+/// The native backends already clamp an over-the-edge region, but silently: the
+/// caller would then derive `scale` and `origin` from a rectangle that was never
+/// captured. Clipping here keeps that metadata describing the real capture.
+///
+/// Throws [ArgumentError] when [region] lies entirely off the display.
+Rectangle<int>? clipToScreen(Rectangle<int>? region, Point<int> screen) {
+  if (region == null || region.width <= 0 || region.height <= 0) return null;
+
+  final clipped = region.intersection(Rectangle(0, 0, screen.x, screen.y));
+  if (clipped == null || clipped.width <= 0 || clipped.height <= 0) {
+    throw ArgumentError.value(
+      region,
+      'region',
+      'Lies outside the ${screen.x}x${screen.y} primary display',
+    );
+  }
+  return clipped;
 }
 
 /// Thrown when an automation action is aborted because the pointer is parked in
@@ -170,6 +241,41 @@ class _NativeMouse implements PlatformMouse {
 
   @override
   bool isAccessibilityTrusted() => _b.isAccessibilityTrusted();
+}
+
+class _NativeScreen implements PlatformScreen {
+  _NativeScreen(this._b);
+
+  final NativeBindings _b;
+
+  @override
+  Capture capture(Rectangle<int>? region) {
+    final screen = _b.screenSize();
+    // Clip up front so scale and origin below describe what was really grabbed,
+    // rather than a rectangle the native layer quietly trimmed.
+    final area = clipToScreen(region, screen);
+
+    final (bytes, w, h) = _b.captureScreen(
+      area?.left ?? 0,
+      area?.top ?? 0,
+      area?.width ?? 0,
+      area?.height ?? 0,
+    );
+    // The native layer takes a logical rect and hands back physical pixels, so
+    // the scale falls out of the two widths.
+    final logicalWidth = area?.width ?? screen.x;
+    final scale = logicalWidth > 0 ? w / logicalWidth : 1.0;
+    return Capture(
+      bytes,
+      w,
+      h,
+      scale: scale,
+      origin: Point(area?.left ?? 0, area?.top ?? 0),
+    );
+  }
+
+  @override
+  bool isScreenCaptureTrusted() => _b.isScreenCaptureTrusted();
 }
 
 // --- Keyboard Implementations ---
@@ -586,14 +692,19 @@ class _WindowsKeyboard implements PlatformKeyboard {
 
 PlatformMouse? _platformMouse;
 PlatformKeyboard? _platformKeyboard;
+PlatformScreen? _platformScreen;
 
 /// Mockable instance for testing
 set platformMouseInstance(PlatformMouse? mock) => _platformMouse = mock;
 set platformKeyboardInstance(PlatformKeyboard? mock) =>
     _platformKeyboard = mock;
+set platformScreenInstance(PlatformScreen? mock) => _platformScreen = mock;
 
 PlatformMouse get platformMouse =>
     _platformMouse ??= _NativeMouse(NativeBindings.load());
+
+PlatformScreen get platformScreen =>
+    _platformScreen ??= _NativeScreen(NativeBindings.load());
 
 PlatformKeyboard get platformKeyboard {
   if (_platformKeyboard != null) return _platformKeyboard!;

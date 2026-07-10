@@ -1,7 +1,13 @@
+import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
+import 'package:image/image.dart' as img;
+import 'src/locate.dart';
 import 'src/platform.dart';
 export 'src/keyboard.dart';
-export 'src/platform.dart' show MouseButton, FailSafe, FailSafeException;
+export 'src/locate.dart';
+export 'src/platform.dart'
+    show MouseButton, FailSafe, FailSafeException, Capture;
 
 /// Easing function: t in [0,1] -> progress in [0,1]
 typedef Easing = double Function(double t);
@@ -39,6 +45,10 @@ double easeInElastic(double t) {
   return -pow(2, 10 * t - 10).toDouble() * sin((t * 10 - 10.75) * c4);
 }
 
+/// The center point of [box].
+Point<int> center(Rectangle<int> box) =>
+    Point(box.left + box.width ~/ 2, box.top + box.height ~/ 2);
+
 class Screen {
   /// Returns the primary screen size in pixels.
   static Point<int> size() => platformMouse.screenSize();
@@ -51,6 +61,129 @@ class Screen {
   static bool onScreen(num x, num y) {
     final s = size();
     return x >= 0 && y >= 0 && x < s.x && y < s.y;
+  }
+
+  /// Whether the OS has granted screen-capture permission.
+  ///
+  /// On macOS this is the Screen Recording permission; without it
+  /// [screenshot] fails. Always true on Linux and Windows.
+  static bool get isScreenCaptureTrusted =>
+      platformScreen.isScreenCaptureTrusted();
+
+  /// Captures the primary display, or just [region] of it.
+  ///
+  /// [region] is in logical coordinates - the same space as [Mouse.position]
+  /// and [size]. The returned [Capture] holds *physical* pixels, so on a HiDPI
+  /// display its dimensions are the logical size times the backing scale
+  /// factor. When [filename] is given, the capture is also written there as a
+  /// PNG.
+  ///
+  /// A [region] that runs past the edge of the display is clipped to it, and
+  /// the returned [Capture]'s `origin` and `scale` describe the clipped area.
+  ///
+  /// Throws [ArgumentError] if [region] lies entirely off the display, and
+  /// [StateError] if the capture itself fails - most often missing macOS
+  /// Screen Recording permission, or macOS older than 14.
+  static Capture screenshot({Rectangle<int>? region, String? filename}) {
+    final capture = platformScreen.capture(region);
+    if (filename != null) {
+      final image = img.Image.fromBytes(
+        width: capture.width,
+        height: capture.height,
+        bytes: capture.rgba.buffer,
+        numChannels: 4,
+      );
+      File(filename).writeAsBytesSync(img.encodePng(image));
+    }
+    return capture;
+  }
+
+  /// The `(r, g, b)` color of the screen pixel at logical ([x], [y]) - the same
+  /// coordinate space as [Mouse.position].
+  ///
+  /// Captures a 1x1 logical region, which on a HiDPI display is several
+  /// physical pixels; the top-left one is returned.
+  ///
+  /// Each call performs its own screen capture, which is not cheap. To read
+  /// many pixels, take one [screenshot] and use [Capture.pixelAt].
+  static (int, int, int) pixel(int x, int y) =>
+      screenshot(region: Rectangle(x, y, 1, 1)).pixelAt(0, 0);
+
+  /// Whether the screen pixel at logical ([x], [y]) matches [rgb], allowing a
+  /// per-channel absolute difference of up to [tolerance].
+  static bool pixelMatchesColor(
+    int x,
+    int y,
+    (int, int, int) rgb, {
+    int tolerance = 0,
+  }) {
+    final (r, g, b) = pixel(x, y);
+    final (wantR, wantG, wantB) = rgb;
+    return (r - wantR).abs() <= tolerance &&
+        (g - wantG).abs() <= tolerance &&
+        (b - wantB).abs() <= tolerance;
+  }
+
+  /// Finds the image at [imagePath] on screen, searching [region] if given.
+  ///
+  /// Returns the match in *logical* coordinates - ready for [Mouse.click] - or
+  /// null when it is not found. Matching is exact, so the needle must have been
+  /// captured at the same scale as the screen (a PNG saved by [screenshot] on
+  /// this display qualifies).
+  static Rectangle<int>? locateOnScreen(
+    String imagePath, {
+    Rectangle<int>? region,
+  }) {
+    final haystack = screenshot(region: region);
+    final match = locate(_decodeNeedle(imagePath), haystack);
+    return match == null ? null : _toLogicalRect(match, haystack);
+  }
+
+  /// Every on-screen occurrence of the image at [imagePath], in logical
+  /// coordinates.
+  static List<Rectangle<int>> locateAllOnScreen(
+    String imagePath, {
+    Rectangle<int>? region,
+  }) {
+    final haystack = screenshot(region: region);
+    return locateAll(
+      _decodeNeedle(imagePath),
+      haystack,
+    ).map((m) => _toLogicalRect(m, haystack)).toList(growable: false);
+  }
+
+  /// The center of the first on-screen match, in logical coordinates, or null.
+  static Point<int>? locateCenterOnScreen(
+    String imagePath, {
+    Rectangle<int>? region,
+  }) {
+    final box = locateOnScreen(imagePath, region: region);
+    return box == null ? null : center(box);
+  }
+
+  static Capture _decodeNeedle(String imagePath) {
+    final decoded = img.decodeImage(File(imagePath).readAsBytesSync());
+    if (decoded == null) {
+      throw ArgumentError.value(
+        imagePath,
+        'imagePath',
+        'Not a decodable image',
+      );
+    }
+    final rgba = decoded
+        .convert(numChannels: 4)
+        .getBytes(order: img.ChannelOrder.rgba);
+    return Capture(Uint8List.fromList(rgba), decoded.width, decoded.height);
+  }
+
+  static Rectangle<int> _toLogicalRect(Rectangle<int> physical, Capture in_) {
+    final topLeft = in_.toLogical(physical.left, physical.top);
+    return Rectangle(
+      topLeft.x,
+      topLeft.y,
+      (physical.width / in_.scale).round(),
+      (physical.height / in_.scale).round(),
+    );
   }
 }
 

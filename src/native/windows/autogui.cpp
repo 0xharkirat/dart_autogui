@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <vector>
 #include <windows.h>
 
@@ -113,3 +114,94 @@ void _sendKey(WORD keycode, DWORD flags) {
 EXPORT void dag_key_down(int keycode) { _sendKey((WORD)keycode, 0); }
 
 EXPORT void dag_key_up(int keycode) { _sendKey((WORD)keycode, KEYEVENTF_KEYUP); }
+
+EXPORT int dag_is_screen_capture_trusted() {
+  return 1; // Windows has no per-app screen capture permission.
+}
+
+EXPORT unsigned char *dag_capture_screen(int x, int y, int w, int h, int *out_w,
+                                         int *out_h) {
+  if (out_w)
+    *out_w = 0;
+  if (out_h)
+    *out_h = 0;
+
+  if (w <= 0 || h <= 0) {
+    x = 0;
+    y = 0;
+    w = GetSystemMetrics(SM_CXSCREEN);
+    h = GetSystemMetrics(SM_CYSCREEN);
+  }
+  if (w <= 0 || h <= 0)
+    return NULL;
+
+  HDC screen = GetDC(NULL);
+  if (!screen)
+    return NULL;
+  HDC mem = CreateCompatibleDC(screen);
+  HBITMAP bmp = CreateCompatibleBitmap(screen, w, h);
+  if (!mem || !bmp) {
+    if (bmp)
+      DeleteObject(bmp);
+    if (mem)
+      DeleteDC(mem);
+    ReleaseDC(NULL, screen);
+    return NULL;
+  }
+
+  HGDIOBJ old = SelectObject(mem, bmp);
+  // A failed BitBlt leaves the bitmap untouched, and GetDIBits would happily
+  // hand back that black/garbage buffer as if it were a capture.
+  if (!BitBlt(mem, 0, 0, w, h, screen, x, y, SRCCOPY)) {
+    SelectObject(mem, old);
+    DeleteObject(bmp);
+    DeleteDC(mem);
+    ReleaseDC(NULL, screen);
+    return NULL;
+  }
+
+  BITMAPINFO bi = {};
+  bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  bi.bmiHeader.biWidth = w;
+  bi.bmiHeader.biHeight = -h; // negative = top-down rows
+  bi.bmiHeader.biPlanes = 1;
+  bi.bmiHeader.biBitCount = 32;
+  bi.bmiHeader.biCompression = BI_RGB;
+
+  size_t bytes = (size_t)w * (size_t)h * 4;
+  unsigned char *buf = (unsigned char *)malloc(bytes);
+  int ok = 0;
+  if (buf)
+    ok = GetDIBits(mem, bmp, 0, h, buf, &bi, DIB_RGB_COLORS) != 0;
+
+  SelectObject(mem, old);
+  DeleteObject(bmp);
+  DeleteDC(mem);
+  ReleaseDC(NULL, screen);
+
+  if (!buf || !ok) {
+    if (buf)
+      free(buf);
+    return NULL;
+  }
+
+  // GetDIBits yields BGRA with an undefined alpha under BI_RGB; swap to RGBA
+  // and force the alpha opaque.
+  for (size_t i = 0; i < bytes; i += 4) {
+    unsigned char b = buf[i];
+    buf[i] = buf[i + 2];
+    buf[i + 2] = b;
+    buf[i + 3] = 255;
+  }
+
+  if (out_w)
+    *out_w = w;
+  if (out_h)
+    *out_h = h;
+  return buf;
+}
+
+EXPORT void dag_free_image(unsigned char *buf) {
+  if (buf)
+    free(buf);
+}

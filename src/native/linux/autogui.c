@@ -3,6 +3,7 @@
 #include <X11/extensions/XTest.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 // Export macros
 #if defined(_WIN32)
@@ -157,4 +158,93 @@ EXPORT int dag_keysym_to_keycode(int keysym) {
     KeyCode code = XKeysymToKeycode(d, (KeySym)keysym);
     XCloseDisplay(d);
     return (int)code;
+}
+
+EXPORT int dag_is_screen_capture_trusted() {
+    // X11 has no per-app screen capture permission.
+    return 1;
+}
+
+static int _mask_shift(unsigned long mask) {
+    int shift = 0;
+    if (!mask) return 0;
+    while (!(mask & 1UL)) { mask >>= 1; shift++; }
+    return shift;
+}
+
+// Extracts one channel and widens it to 0-255. A depth-24/32 visual has an
+// 8-bit mask and this is the identity; a 16-bit visual (RGB565) has 5- and
+// 6-bit channels that would otherwise come out far too dark.
+static unsigned char _channel(unsigned long pixel, unsigned long mask, int shift) {
+    if (!mask) return 0;
+    unsigned long max = mask >> shift;
+    if (max == 0) return 0;
+    unsigned long value = (pixel & mask) >> shift;
+    if (max == 255) return (unsigned char)value;
+    return (unsigned char)((value * 255UL) / max);
+}
+
+// ponytail: XGetPixel per pixel, one call per pixel. Fine for occasional
+// captures; switch to XShmGetImage with direct buffer access if capture rate
+// ever matters.
+EXPORT unsigned char* dag_capture_screen(int x, int y, int w, int h, int* out_w, int* out_h) {
+    if (out_w) *out_w = 0;
+    if (out_h) *out_h = 0;
+
+    Display* d = XOpenDisplay(NULL);
+    if (!d) return NULL;
+    Window root = DefaultRootWindow(d);
+    int s = DefaultScreen(d);
+    int sw = DisplayWidth(d, s);
+    int sh = DisplayHeight(d, s);
+
+    if (w <= 0 || h <= 0) {
+        x = 0; y = 0;
+        w = sw;
+        h = sh;
+    }
+
+    // XGetImage raises BadMatch for any area outside the drawable, and Xlib's
+    // default error handler terminates the host process. Clamp instead.
+    if (x < 0) { w += x; x = 0; }
+    if (y < 0) { h += y; y = 0; }
+    if (x >= sw || y >= sh) { XCloseDisplay(d); return NULL; }
+    // Compare against the remaining span rather than testing x + w: with w near
+    // INT_MAX that addition overflows to a negative value, the clamp is skipped,
+    // and XGetImage gets the out-of-range width we are here to prevent. Both
+    // sw - x and sh - y are positive after the guards above.
+    if (w > sw - x) w = sw - x;
+    if (h > sh - y) h = sh - y;
+    if (w <= 0 || h <= 0) { XCloseDisplay(d); return NULL; }
+
+    XImage* img = XGetImage(d, root, x, y, w, h, AllPlanes, ZPixmap);
+    if (!img) { XCloseDisplay(d); return NULL; }
+
+    unsigned char* buf = (unsigned char*)malloc((size_t)w * (size_t)h * 4);
+    if (!buf) { XDestroyImage(img); XCloseDisplay(d); return NULL; }
+
+    int rs = _mask_shift(img->red_mask);
+    int gs = _mask_shift(img->green_mask);
+    int bs = _mask_shift(img->blue_mask);
+
+    for (int py = 0; py < h; py++) {
+        for (int px = 0; px < w; px++) {
+            unsigned long p = XGetPixel(img, px, py);
+            size_t i = ((size_t)py * (size_t)w + (size_t)px) * 4;
+            buf[i + 0] = _channel(p, img->red_mask, rs);
+            buf[i + 1] = _channel(p, img->green_mask, gs);
+            buf[i + 2] = _channel(p, img->blue_mask, bs);
+            buf[i + 3] = 255;
+        }
+    }
+
+    XDestroyImage(img);
+    XCloseDisplay(d);
+    if (out_w) *out_w = w;
+    if (out_h) *out_h = h;
+    return buf;
+}
+
+EXPORT void dag_free_image(unsigned char* buf) {
+    if (buf) free(buf);
 }

@@ -2,7 +2,10 @@
 
 `autogui` is a Dart package for cross-platform GUI automation. It enables you to programmatically control desktop mouse and keyboard actions from Dart using FFI and native platform APIs.
 
-**Note:** This package is under development. It is implemented purely in Dart using FFI bindings to C and platform-native interfaces. There are **no dependencies on Python or external runtimes**.
+> [!NOTE]
+> This package is under development. It is implemented purely in Dart using FFI
+> bindings to C and platform-native interfaces. There are **no dependencies on
+> Python or external runtimes**.
 
 ## Features
 
@@ -10,8 +13,34 @@
 - Mouse clicks, drags, and scrolling
 - Keyboard typing, key presses, hotkeys/chords, and key-hold
 - PyAutoGUI-style named keys (`press('f1')`, `hotkey(['ctrl', 'c'])`) with shift-aware typing
+- Screen capture, pixel colour reads, and on-screen image location
 - Screen-corner fail-safe to abort a runaway script
 - Works on Windows, macOS, and Linux
+
+## Platform support
+
+Mouse and keyboard automation are implemented on macOS, Linux, and Windows.
+
+Screen capture (`Screen.screenshot`, `Screen.pixel`, `Screen.locateOnScreen`, and
+friends) is **only verified on macOS**:
+
+| Platform | Screen capture | Notes |
+| --- | --- | --- |
+| macOS | Implemented and tested | Requires **macOS 14+** and Screen Recording permission |
+| Linux | Implemented, **not yet tested** | X11 only (`XGetImage`); no Wayland support |
+| Windows | Implemented, **not yet tested** | GDI (`BitBlt`) |
+
+> [!WARNING]
+> The Linux and Windows capture backends are written and code-reviewed but have
+> **never been compiled or run** by the author. Treat them as unproven, and
+> please report what you find. Mouse and keyboard automation are unaffected.
+
+> [!IMPORTANT]
+> On macOS the process running your Dart program needs **Screen Recording**
+> permission (System Settings → Privacy & Security → Screen Recording). That is
+> the terminal or host application, not `dart` itself, and it must be restarted
+> after you grant it. Without it, `Screen.screenshot` throws a `StateError`.
+> Check first with `Screen.isScreenCaptureTrusted`.
 
 ## Installation
 
@@ -38,7 +67,11 @@ Use the `Mouse` class to control the cursor.
 - **`Mouse.position()`**: Returns `Point<double>(x, y)` of the current mouse position in global desktop coordinates.
 - **`Screen.onScreen(x, y)`**: Checks if coordinates are within the screen bounds.
 
-> **Note**: On multi-monitor macOS setups, `Mouse.position()` can legitimately return negative `x` or `y` values when the cursor is on a display positioned left of or above the primary display. `Screen.size()` and `Screen.onScreen()` currently describe the primary display only.
+> [!NOTE]
+> On multi-monitor macOS setups, `Mouse.position()` can legitimately return
+> negative `x` or `y` values when the cursor is on a display positioned left of
+> or above the primary display. `Screen.size()` and `Screen.onScreen()` describe
+> the primary display only.
 
 #### Movement
 - **`Mouse.moveTo(x, y, {duration, easing})`**: Moves mouse to absolute coordinates.
@@ -79,11 +112,42 @@ Around 90 named keys, mapped per platform:
 
 Keys with no equivalent on a platform (for example `f21`-`f24` and `insert` on macOS) resolve to null; use `Keyboard.isValidKey` to check.
 
+### Screen Capture & Image Location
+
+See [Platform support](#platform-support) first - this is macOS-verified only.
+
+- **`Screen.screenshot({region, filename})`**: Captures the primary display, or a `region` of it, and optionally writes a PNG. Returns a `Capture`.
+- **`Screen.pixel(x, y)`**: The `(r, g, b)` of one screen pixel.
+- **`Screen.pixelMatchesColor(x, y, rgb, {tolerance})`**: Compares a pixel to a colour, per-channel.
+- **`Screen.locateOnScreen(path, {region})`**: Finds an image on screen. Returns a `Rectangle<int>`, or null.
+- **`Screen.locateAllOnScreen(path, {region})`** / **`Screen.locateCenterOnScreen(path, {region})`**
+- **`locate(needle, haystack)`** / **`locateAll(needle, haystack)`**: Match one `Capture` inside another.
+- **`center(box)`**: The centre `Point<int>` of a rectangle.
+- **`Screen.isScreenCaptureTrusted`**: Whether the OS granted capture permission.
+
+Coordinates you pass in and get back are **logical** - the same space as
+`Mouse.position` - so a match feeds straight into `Mouse.click`:
+
+```dart
+final button = Screen.locateCenterOnScreen('button.png');
+if (button != null) Mouse.click(x: button.x, y: button.y);
+```
+
+> [!NOTE]
+> A `Capture` holds **physical** pixels, which on a HiDPI display are the logical
+> size times the backing scale factor (2x on Retina). Use `Capture.toLogical` to
+> convert, or stay in logical coordinates by using the `Screen.locate*` helpers.
+
+> [!TIP]
+> Matching is **exact** on RGB - alpha is ignored, and there is no `confidence`
+> option. Give it a distinctive needle: a flat one matches the first similar
+> patch in scan order, and is also the slow case.
+
 ### Fail-safe
 
-By default, keyboard actions abort with a `FailSafeException` if the pointer is slammed
-into a screen corner - a manual kill switch for a runaway script. Disable with
-`Keyboard.failSafeEnabled = false`.
+By default, mouse and keyboard actions abort with a `FailSafeException` if the pointer
+is slammed into a screen corner - a manual kill switch for a runaway script. Disable
+with `Keyboard.failSafeEnabled = false` (or `FailSafe.enabled = false`).
 
 ## Examples
 
@@ -118,11 +182,15 @@ See [`example/`](example/) for more.
 
 ## Current Limitations
 
+- **Screen capture is only tested on macOS.** The Linux and Windows backends are implemented but unproven - see [Platform support](#platform-support).
+- Screen capture on macOS requires macOS 14 or newer, plus Screen Recording permission.
+- Capture covers the primary display only; multi-monitor is not supported.
+- Image matching is exact - no `confidence`/fuzzy matching and no grayscale mode.
+- Linux capture is X11 only; Wayland is not supported.
 - Text entry assumes a US keyboard layout; non-ASCII input is not yet supported.
 - Media and volume keys are not yet available on macOS.
-- There is no screenshot or image-matching API yet.
 
 ## Requirements
-- **macOS**: Xcode Command Line Tools.
-- **Linux**: `libx11-dev`, `libxtst-dev`, `cmake`, `build-essential`.
+- **macOS**: Xcode Command Line Tools. Screen capture additionally needs macOS 14+ and Screen Recording permission; mouse and keyboard work on older releases.
+- **Linux**: `libx11-dev`, `libxtst-dev`, `cmake`, `build-essential`. X11 session (not Wayland).
 - **Windows**: Visual Studio (C++) or MinGW, `cmake`.
