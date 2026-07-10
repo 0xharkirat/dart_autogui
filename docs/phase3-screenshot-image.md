@@ -1,8 +1,9 @@
 # Phase 3 Plan: Screenshot & Image Location
 
-Status: **planning only** (no implementation on this branch).
+Status: milestones **A, B and C are implemented** on this branch; **D is deferred**.
 Scopes the remaining PyAutoGUI gap around screen capture and image matching, with
-a lazy/minimal implementation approach.
+a lazy/minimal implementation approach. Kept as the record of what was decided,
+what was measured, and what is still unverified (see §7).
 
 ## 1. The remaining gap
 
