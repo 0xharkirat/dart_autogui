@@ -8,8 +8,45 @@
 // That is the terminal app if you run this from a terminal, not `dart` itself.
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:autogui/autogui.dart';
+import 'package:image/image.dart' as img;
+
+/// Copies a physical-pixel block out of [src].
+Capture cropPhysical(Capture src, int x, int y, int w, int h) {
+  final bytes = Uint8List(w * h * 4);
+  for (var row = 0; row < h; row++) {
+    final from = ((y + row) * src.width + x) * 4;
+    bytes.setRange(row * w * 4, (row + 1) * w * 4, src.rgba, from);
+  }
+  return Capture(bytes, w, h);
+}
+
+List<int> encodeRgba(Capture c) => img.encodePng(
+  img.Image.fromBytes(
+    width: c.width,
+    height: c.height,
+    bytes: c.rgba.buffer,
+    numChannels: 4,
+  ),
+);
+
+Capture decodeRgba(Uint8List png) {
+  final image = img.decodeImage(png)!;
+  final rgba = image
+      .convert(numChannels: 4)
+      .getBytes(order: img.ChannelOrder.rgba);
+  return Capture(Uint8List.fromList(rgba), image.width, image.height);
+}
+
+bool _sameBytes(Uint8List a, Uint8List b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
 
 void main() {
   stdout.writeln('screen capture permitted: ${Screen.isScreenCaptureTrusted}');
@@ -152,36 +189,72 @@ void main() {
       );
     }
 
-    Screen.screenshot(
-      region: Rectangle(best.x, best.y, rw, rh),
-      filename: 'needle.png',
-    );
-    final clock = Stopwatch()..start();
-    final found = Screen.locateOnScreen('needle.png');
-    clock.stop();
     final want = Rectangle(best.x, best.y, rw, rh);
+    final px = best.x * scale, py = best.y * scale;
+    final pw = rw * scale, ph = rh * scale;
+
+    // (1) Deterministic. Crop the needle out of the capture we already hold and
+    // search that same capture. No second screen grab, so nothing can move: a
+    // failure here is a real bug in PNG round-tripping, matching, or mapping.
+    final needle = cropPhysical(full, px, py, pw, ph);
+    File('needle.png').writeAsBytesSync(encodeRgba(needle));
+    final decoded = decodeRgba(File('needle.png').readAsBytesSync());
+
+    final lossless = _sameBytes(decoded.rgba, needle.rgba);
     stdout.writeln(
-      '${found == want ? "OK  " : "FAIL"} locateOnScreen -> $found  '
-      '(expected $want)  in ${clock.elapsedMilliseconds}ms',
+      '${lossless ? "OK  " : "FAIL"} png round trip is lossless '
+      '(${needle.rgba.length} bytes)',
     );
-    if (found == null) {
+
+    final inMemory = locate(decoded, full);
+    final wantPhysical = Rectangle(px, py, pw, ph);
+    stdout.writeln(
+      '${inMemory == wantPhysical ? "OK  " : "FAIL"} locate(needle, capture) '
+      '-> $inMemory  (expected $wantPhysical)',
+    );
+    if (inMemory != null) {
+      final tl = full.toLogical(inMemory.left, inMemory.top);
       stdout.writeln(
-        'NOT FOUND: the screen changed between the two captures. Re-run over a '
-        'static area.',
-      );
-    } else if (found != want) {
-      stdout.writeln(
-        'The pattern also occurs earlier in scan order, or the coordinate '
-        'mapping is wrong. Check whether the crop is genuinely unique.',
+        '${tl == best ? "OK  " : "FAIL"} toLogical -> $tl  (expected $best)',
       );
     }
 
-    final centre = Screen.locateCenterOnScreen('needle.png');
-    final wantCentre = Point(best.x + rw ~/ 2, best.y + rh ~/ 2);
+    // (2) Is a region capture pixel-identical to that block of a full capture?
+    // If SCK resamples a scaled sourceRect, a needle cropped this way could
+    // never match, and locateOnScreen would be unreliable by construction.
+    final regionShot = Screen.screenshot(region: want);
+    final identical =
+        regionShot.width == pw &&
+        regionShot.height == ph &&
+        _sameBytes(regionShot.rgba, needle.rgba);
     stdout.writeln(
-      '${centre == wantCentre ? "OK  " : "FAIL"} locateCenterOnScreen -> '
-      '$centre  (expected $wantCentre)',
+      '${identical ? "OK  " : "DIFF"} region capture == same block of full '
+      'capture (${regionShot.width}x${regionShot.height})',
     );
+    if (!identical) {
+      stdout.writeln(
+        '  DIFF here means either the screen changed, or region captures are '
+        'resampled and cannot be used as needles. Compare against a static '
+        'area to tell them apart.',
+      );
+    }
+
+    // (3) Live. Takes a fresh screenshot, so a moving screen can defeat it.
+    // Informational only - (1) is the assertion.
+    final clock = Stopwatch()..start();
+    final found = Screen.locateOnScreen('needle.png');
+    clock.stop();
+    stdout.writeln(
+      '${found == want ? "OK  " : "live"} locateOnScreen -> $found  '
+      '(expected $want)  in ${clock.elapsedMilliseconds}ms',
+    );
+    if (found != want) {
+      stdout.writeln(
+        '  A live miss is expected when the chosen region is animating (it is '
+        'picked for colour variety, which often means text). Not a failure of '
+        'the matcher - see (1).',
+      );
+    }
 
     stdout.writeln('\nOK');
   } on StateError catch (e) {
