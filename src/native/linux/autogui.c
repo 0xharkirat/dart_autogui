@@ -209,8 +209,12 @@ EXPORT unsigned char* dag_capture_screen(int x, int y, int w, int h, int* out_w,
     if (x < 0) { w += x; x = 0; }
     if (y < 0) { h += y; y = 0; }
     if (x >= sw || y >= sh) { XCloseDisplay(d); return NULL; }
-    if (x + w > sw) w = sw - x;
-    if (y + h > sh) h = sh - y;
+    // Compare against the remaining span rather than testing x + w: with w near
+    // INT_MAX that addition overflows to a negative value, the clamp is skipped,
+    // and XGetImage gets the out-of-range width we are here to prevent. Both
+    // sw - x and sh - y are positive after the guards above.
+    if (w > sw - x) w = sw - x;
+    if (h > sh - y) h = sh - y;
     if (w <= 0 || h <= 0) { XCloseDisplay(d); return NULL; }
 
     XImage* img = XGetImage(d, root, x, y, w, h, AllPlanes, ZPixmap);

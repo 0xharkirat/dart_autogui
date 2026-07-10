@@ -129,6 +129,64 @@ void main() {
     });
   });
 
+  group('clipToScreen', () {
+    const screen = Point(1000, 800);
+
+    test('a null or zero-area region means a full-display capture', () {
+      expect(clipToScreen(null, screen), isNull);
+      expect(clipToScreen(const Rectangle(10, 10, 0, 50), screen), isNull);
+      expect(clipToScreen(const Rectangle(10, 10, 50, 0), screen), isNull);
+    });
+
+    test('an in-bounds region passes through untouched', () {
+      const region = Rectangle(10, 20, 30, 40);
+      expect(clipToScreen(region, screen), region);
+    });
+
+    test('a region crossing the right or bottom edge is trimmed', () {
+      expect(
+        clipToScreen(const Rectangle(990, 0, 20, 20), screen),
+        const Rectangle(990, 0, 10, 20),
+      );
+      expect(
+        clipToScreen(const Rectangle(0, 790, 20, 20), screen),
+        const Rectangle(0, 790, 20, 10),
+      );
+    });
+
+    test('a region crossing the left or top edge is trimmed to the origin', () {
+      expect(
+        clipToScreen(const Rectangle(-10, -10, 30, 30), screen),
+        const Rectangle(0, 0, 20, 20),
+      );
+    });
+
+    test('a region exactly filling the screen passes through', () {
+      const region = Rectangle(0, 0, 1000, 800);
+      expect(clipToScreen(region, screen), region);
+    });
+
+    test('a fully off-display region throws', () {
+      expect(
+        () => clipToScreen(const Rectangle(1000, 0, 10, 10), screen),
+        throwsArgumentError,
+      );
+      expect(
+        () => clipToScreen(const Rectangle(-50, 0, 10, 10), screen),
+        throwsArgumentError,
+      );
+    });
+
+    test('a huge width cannot escape the screen bounds', () {
+      // The Linux backend used to overflow on x + w with w near INT_MAX.
+      final clipped = clipToScreen(
+        const Rectangle(1, 0, 2147483647, 100),
+        screen,
+      );
+      expect(clipped, const Rectangle(1, 0, 999, 100));
+    });
+  });
+
   group('center', () {
     test('finds the middle of a box', () {
       expect(center(const Rectangle(0, 0, 10, 20)), const Point(5, 10));

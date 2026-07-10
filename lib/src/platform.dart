@@ -72,6 +72,29 @@ abstract class PlatformScreen {
   bool isScreenCaptureTrusted();
 }
 
+/// Clips [region] to a [screen]-sized display, returning null for a full-display
+/// capture (a null or zero-area [region], both of which the native layer treats
+/// as "capture everything").
+///
+/// The native backends already clamp an over-the-edge region, but silently: the
+/// caller would then derive `scale` and `origin` from a rectangle that was never
+/// captured. Clipping here keeps that metadata describing the real capture.
+///
+/// Throws [ArgumentError] when [region] lies entirely off the display.
+Rectangle<int>? clipToScreen(Rectangle<int>? region, Point<int> screen) {
+  if (region == null || region.width <= 0 || region.height <= 0) return null;
+
+  final clipped = region.intersection(Rectangle(0, 0, screen.x, screen.y));
+  if (clipped == null || clipped.width <= 0 || clipped.height <= 0) {
+    throw ArgumentError.value(
+      region,
+      'region',
+      'Lies outside the ${screen.x}x${screen.y} primary display',
+    );
+  }
+  return clipped;
+}
+
 /// Thrown when an automation action is aborted because the pointer is parked in
 /// a screen corner. See [FailSafe].
 class FailSafeException implements Exception {
@@ -227,12 +250,10 @@ class _NativeScreen implements PlatformScreen {
 
   @override
   Capture capture(Rectangle<int>? region) {
-    // A non-positive region makes the native side capture the full display, so
-    // resolve it to null here as well - otherwise scale and origin would be
-    // computed against a region that was never used.
-    final area = (region == null || region.width <= 0 || region.height <= 0)
-        ? null
-        : region;
+    final screen = _b.screenSize();
+    // Clip up front so scale and origin below describe what was really grabbed,
+    // rather than a rectangle the native layer quietly trimmed.
+    final area = clipToScreen(region, screen);
 
     final (bytes, w, h) = _b.captureScreen(
       area?.left ?? 0,
@@ -242,7 +263,7 @@ class _NativeScreen implements PlatformScreen {
     );
     // The native layer takes a logical rect and hands back physical pixels, so
     // the scale falls out of the two widths.
-    final logicalWidth = area?.width ?? _b.screenSize().x;
+    final logicalWidth = area?.width ?? screen.x;
     final scale = logicalWidth > 0 ? w / logicalWidth : 1.0;
     return Capture(
       bytes,

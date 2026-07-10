@@ -78,7 +78,11 @@ class Screen {
   /// factor. When [filename] is given, the capture is also written there as a
   /// PNG.
   ///
-  /// Throws [StateError] if the capture fails - most often missing macOS
+  /// A [region] that runs past the edge of the display is clipped to it, and
+  /// the returned [Capture]'s `origin` and `scale` describe the clipped area.
+  ///
+  /// Throws [ArgumentError] if [region] lies entirely off the display, and
+  /// [StateError] if the capture itself fails - most often missing macOS
   /// Screen Recording permission, or macOS older than 14.
   static Capture screenshot({Rectangle<int>? region, String? filename}) {
     final capture = platformScreen.capture(region);
